@@ -1,0 +1,33 @@
+/*
+ * Copyright the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.quarkiverse.idempotency.runtime.spi;
+
+import java.util.Map;
+
+import io.quarkus.runtime.annotations.RegisterForReflection;
+
+/**
+ * A captured HTTP response, persisted so a later retry with the same idempotency key can be
+ * answered without re-running the operation.
+ *
+ * @param status the HTTP status code
+ * @param headers response headers to replay (first value per name)
+ * @param entity the response entity object (serialized by the framework on replay)
+ * @param mediaType the response media type, or {@code null}
+ */
+@RegisterForReflection
+public record StoredResponse(int status, Map<String, String> headers, Object entity, String mediaType) {
+}

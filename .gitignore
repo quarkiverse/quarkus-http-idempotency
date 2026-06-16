@@ -1,0 +1,37 @@
+# --- Build output ---
+target/
+build/
+*.jar
+*.war
+!.mvn/wrapper/maven-wrapper.jar
+
+# --- Quarkus ---
+.quarkus/
+*-runner
+*-runner.jar
+
+# --- IDE / editor ---
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+*.swp
+*~
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Internal / private artifacts: NEVER publish ---
+# Security audit (contains exploit detail), generated reports, and report tooling live in the
+# sibling ../quarkus-idempotency-private/ directory. These patterns are a belt-and-suspenders guard
+# in case anything is regenerated inside the repo tree.
+SECURITY-AUDIT.md
+report/
+*.pdf
+quarkus-idempotency-private/

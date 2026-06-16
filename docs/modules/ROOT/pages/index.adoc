@@ -1,0 +1,297 @@
+= Quarkus Idempotency
+:idprefix:
+:idseparator: -
+:extension-status: experimental
+
+include::./includes/attributes.adoc[opts=optional]
+
+Make unsafe HTTP requests safe to retry. This extension implements the `Idempotency-Key`
+header (the Stripe / IETF pattern): when a client retries a `POST` or `PATCH` with the same key,
+the server replays the original response instead of executing the operation twice — so the side
+effect happens *exactly once*.
+
+== Installation
+
+Add the dependency to your `pom.xml`:
+
+[source,xml,subs=attributes+]
+----
+<dependency>
+    <groupId>io.quarkiverse.idempotency</groupId>
+    <artifactId>quarkus-http-idempotency</artifactId>
+    <version>{project-version}</version>
+</dependency>
+----
+
+With the extension on the classpath, any `POST` or `PATCH` request that carries an `Idempotency-Key`
+header is handled idempotently. The extension renders its error responses via `quarkus-http-problem`,
+so your application also needs a JSON provider — add `quarkus-rest-jackson` (or `quarkus-rest-jsonb`)
+if it does not have one already.
+
+== Getting started
+
+The client generates a unique key (a UUID is recommended) and sends it on the request. Retrying
+the request with the same key returns the stored result:
+
+[source,bash]
+----
+# First call — runs the operation
+curl -i -H "Idempotency-Key: 8e039...f932" \
+     -H "Content-Type: application/json" \
+     -d '{"item":"widget"}' https://api.example.com/orders
+# HTTP/1.1 201 Created
+# Location: /orders/order-1
+
+# Retry with the same key — replays the stored response, the order is NOT created again
+curl -i -H "Idempotency-Key: 8e039...f932" \
+     -H "Content-Type: application/json" \
+     -d '{"item":"widget"}' https://api.example.com/orders
+# HTTP/1.1 201 Created
+# Idempotent-Replayed: true
+----
+
+== How it works
+
+For a guarded request that carries a key, the extension applies this policy:
+
+[cols="1,2,1",options="header"]
+|===
+| Situation | Behavior | Status
+
+| New key
+| Reserve the key, run the handler, store and return the response
+| the handler's
+
+| Same key, same payload, completed
+| Replay the stored status, body and headers
+| the stored one
+
+| Same key, same payload, still in flight
+| Reject — a concurrent retry is in progress
+| `409`
+
+| Same key, *different* payload
+| Reject — the key was reused for a different request
+| `422`
+
+| Key required but missing or invalid
+| Reject
+| `400`
+
+| No key (and not required)
+| Pass through — the request is not made idempotent
+| —
+|===
+
+To detect a different payload, the extension computes a fingerprint of the request,
+`SHA-256(method + normalized-path + query + body)`, and stores it with the key. The body bytes fed
+into the fingerprint are capped by `max-fingerprint-body`. A replayed response carries an
+`Idempotent-Replayed: true` marker so clients and observability can tell replays apart.
+
+The stored key is never the raw client header. It is derived as
+`SHA-256(principal + scope + raw-key)`, so the idempotency state of one caller is namespaced to that
+caller and can never be served to another — see <<security>>.
+
+By default only `POST` and `PATCH` are guarded — replaying a stored response for a safe or
+naturally idempotent method (`GET`, `PUT`, `DELETE`) would mask fresh data.
+
+=== Async and streaming endpoints
+
+The store lookup is non-blocking, so guarded endpoints may return synchronous values, `Uni`, or
+`CompletionStage` — including with the Redis store — without blocking the event loop. **Streaming**
+responses (`Multi`, Server-Sent Events, `StreamingOutput`) cannot be buffered for replay, so they are
+intentionally *not* made idempotent: the key is released when the response completes and a retry
+re-executes the operation. Do not rely on `Idempotency-Key` for streaming endpoints.
+
+This behavior follows the IETF
+https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-idempotency-key-header[Idempotency-Key
+header draft] (the Stripe pattern): the `409`/`422`/`400` status codes, the payload fingerprint, the
+composite (per-caller) cache key, and the documented expiry policy are all what the draft calls for.
+
+[[errors]]
+== Error responses
+
+Rejections are rendered as RFC 9457 (`application/problem+json`) documents by the
+https://docs.quarkiverse.io/quarkus-http-problem/dev/[`quarkus-http-problem`] extension. The `type`
+URI points to the relevant documentation, as the draft recommends:
+
+[source,json]
+----
+{
+  "type": "https://docs.quarkiverse.io/quarkus-http-idempotency/dev/#idempotency-key-mismatch",
+  "title": "Idempotency-Key reused with a different payload",
+  "status": 422,
+  "detail": "The Idempotency-Key was already used for a request with a different method, path, query, or body.",
+  "instance": "/orders"
+}
+----
+
+[NOTE]
+====
+Rendering uses `quarkus-http-problem`, which requires a JSON provider on the classpath — add
+`quarkus-rest-jackson` (or `quarkus-rest-jsonb`) to your application.
+====
+
+The `type` base is configurable with `quarkus.idempotency.problem-base-uri`. The problem types are:
+
+[cols="1,1,2",options="header"]
+|===
+| Status | Type fragment | When
+
+| `400` | [[idempotency-key-required]]`#idempotency-key-required` | Key required (`require-key=true`) but missing.
+| `400` | [[idempotency-key-invalid]]`#idempotency-key-invalid` | Key is empty, too long, or has control characters.
+| `401` | [[authentication-required]]`#authentication-required` | `require-identity=true` and the caller is anonymous.
+| `409` | [[idempotency-key-conflict]]`#idempotency-key-conflict` | A request with the same key is still in flight.
+| `422` | [[idempotency-key-mismatch]]`#idempotency-key-mismatch` | The key was reused with a different payload.
+|===
+
+== Stores
+
+The reservation/replay state lives in a pluggable store.
+
+=== In-memory (default)
+
+A single-node, in-memory store. No configuration needed. Ideal for a single instance or for
+development. State is lost on restart and is *not* shared across instances.
+
+=== Redis (distributed)
+
+For multi-instance deployments, use Redis. Add the Redis client and select the store:
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.quarkus</groupId>
+    <artifactId>quarkus-redis-client</artifactId>
+</dependency>
+----
+
+[source,properties]
+----
+quarkus.idempotency.store=redis
+quarkus.redis.hosts=redis://localhost:6379
+# Size the pool at or above your peak concurrent guarded requests (see note below)
+quarkus.redis.max-pool-size=50
+----
+
+The Redis store reserves a key with a single atomic `SET key value NX GET PX ttl` round-trip and
+**requires Redis 7.0+**.
+
+[IMPORTANT]
+====
+The store path is blocking, so `quarkus.redis.max-pool-size` must be sized at or above the peak
+number of concurrent guarded requests. The default pool (6 connections + 24 wait queue) overflows
+under load and surfaces as HTTP 500 (`ConnectionPoolTooBusyException`).
+====
+
+At startup the extension logs the active store, which makes a misconfiguration obvious:
+
+[source]
+----
+Idempotency active: store=redis (RedisIdempotencyStore), methods=[POST], header=Idempotency-Key, response-ttl=PT10M
+----
+
+== Configuration reference
+
+All properties are runtime configuration under the `quarkus.idempotency` prefix.
+
+[cols="2,1,3",options="header"]
+|===
+| Property | Default | Description
+
+| `quarkus.idempotency.enabled` | `true` | Master switch.
+| `quarkus.idempotency.header-name` | `Idempotency-Key` | Request header carrying the key.
+| `quarkus.idempotency.methods` | `POST,PATCH` | HTTP methods guarded when the header is present.
+| `quarkus.idempotency.require-key` | `false` | Require the key on guarded methods (otherwise `400`).
+| `quarkus.idempotency.require-identity` | `false` | Reject keyed requests from anonymous callers with `401`. See <<security>>.
+| `quarkus.idempotency.scope-header` | _(unset)_ | Trusted request header (e.g. a tenant id) added as a second isolation dimension. See <<security>>.
+| `quarkus.idempotency.max-key-length` | `255` | Reject longer keys with `400` (also rejects control characters).
+| `quarkus.idempotency.max-entries` | `100000` | In-memory store hard ceiling on entry count (LRU eviction). No effect on Redis.
+| `quarkus.idempotency.max-stored-body` | `256K` | Responses larger than this are not cached (measured from `Content-Length`/`byte[]`/`String`).
+| `quarkus.idempotency.max-fingerprint-body` | `1M` | Cap on request-body bytes hashed into the fingerprint.
+| `quarkus.idempotency.captured-headers` | `Location` | Allow-list of response headers replayed; credential headers are always denied.
+| `quarkus.idempotency.response-ttl` | `24h` | How long a completed response stays replayable.
+| `quarkus.idempotency.lock-ttl` | `60s` | In-flight reservation timeout. Must exceed worst-case handler latency.
+| `quarkus.idempotency.fingerprint-enabled` | `true` | Fingerprint the payload (needed for the `422` mismatch check).
+| `quarkus.idempotency.cache-error-responses` | `false` | Store and replay `5xx` responses too; otherwise a `5xx` releases the key so the client can retry.
+| `quarkus.idempotency.replayed-header` | `Idempotent-Replayed` | Header added on a replay (empty to disable).
+| `quarkus.idempotency.store` | `in-memory` | Store backend: `in-memory` or `redis`.
+| `quarkus.idempotency.problem-base-uri` | `https://docs.quarkiverse.io/quarkus-http-idempotency/dev/` | Documentation base URI used in the `type`/`Link` of `problem+json` errors. See <<errors>>.
+| `quarkus.idempotency.buffer-request-body` | `true` | _(build time)_ Force app-wide request-body buffering so reactive bodies can be fingerprinted. See <<security>>.
+|===
+
+[[security]]
+== Security model
+
+Idempotency replays a *previously stored response*. Getting the isolation and resource bounds right
+is what keeps that safe in a multi-user, internet-facing deployment.
+
+=== Per-caller isolation
+
+The storage key is `SHA-256(principal + scope + raw-key)`, never the raw client header. The
+`principal` is the authenticated identity (from the request `SecurityContext`); `scope` is the value
+of `scope-header` when configured. Two different callers that reuse the same `Idempotency-Key`
+therefore land in different namespaces and can never receive each other's stored response.
+
+[IMPORTANT]
+====
+Per-principal scoping requires the identity to be resolved *before* the idempotency filter runs,
+which is the case with **proactive authentication (the Quarkus default,
+`quarkus.http.auth.proactive=true`)**. With proactive auth disabled, an authenticated caller may
+read as anonymous in the filter and be scoped into the shared anonymous namespace. The extension
+logs a warning at startup in that case. Keep proactive auth on, or scope by a trusted `scope-header`.
+====
+
+=== Anonymous traffic
+
+When a keyed request has no authenticated principal, all anonymous callers share one namespace
+(scoped only by `scope-header`, if set). For endpoints that are intentionally anonymous, either set
+`quarkus.idempotency.require-identity=true` to reject keyed anonymous requests with `401`, or ensure
+those responses contain no per-caller data.
+
+=== `scope-header` trust
+
+`scope-header` is read verbatim from the request. It MUST be set by a trusted gateway and stripped
+from inbound client traffic — otherwise a caller can spoof it to pre-claim or poison another tenant's
+key slot.
+
+=== Replays and method-level authorization
+
+A replay short-circuits before the resource method runs, so authorization performed *inside* the
+method body is not re-evaluated on a replay. This is safe for the intended "same caller, same
+operation" use case because of per-caller scoping; do not rely on in-method authorization as the
+only access control for idempotent endpoints.
+
+=== Stored responses and secrets
+
+Stored responses (entity, status, and the allow-listed headers) are persisted — in Redis they are
+visible to anyone with Redis access. Credential headers (`Set-Cookie`, `Authorization`, and any
+header whose name contains `token`/`secret`/`api-key`/`password`/`credential`) are *always* dropped,
+regardless of `captured-headers`. Still, ensure stored response bodies carry no secrets, and run
+Redis with AUTH and TLS.
+
+=== Resource bounds
+
+* **In-memory store memory** ≈ `max-entries` × your largest cached response. `max-entries` is a hard
+LRU ceiling that prevents unbounded growth; size it for your heap and response sizes. For
+untrusted, internet-facing traffic prefer the Redis store with a `maxmemory`/eviction policy.
+* `max-stored-body` skips caching oversized responses (measured from `Content-Length`/`byte[]`/
+`String`; object entities serialized later are bounded only by `max-entries`).
+* `max-fingerprint-body` caps the per-request hashing work and allocation.
+* Set `lock-ttl` above your worst-case handler latency so a reservation is not reassigned while the
+original request is still running.
+
+== Limitations
+
+* With `buffer-request-body=true` (the default) request bodies are buffered app-wide so they can be
+fingerprinted without a blocking read on reactive endpoints. Bound request size with
+`quarkus.http.limits.max-body-size`, or set `quarkus.idempotency.buffer-request-body=false` if you
+do not need body fingerprinting.
+* Responses are captured as the response entity, bounded by `max-stored-body`. Streaming responses
+(`Multi`/SSE/`StreamingOutput`) are not cached — they pass through and re-execute on retry.
+* The in-memory store is per-instance — use the Redis store for clustered deployments.
+
+[[extension-configuration-reference]]
+== Extension configuration reference
+
+See the table above; all keys take effect at runtime.
