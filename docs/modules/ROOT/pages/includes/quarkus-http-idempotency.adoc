@@ -1,0 +1,463 @@
+[.configuration-legend]
+icon:lock[title=Fixed at build time] Configuration property fixed at build time - All other configuration properties are overridable at runtime
+[.configuration-reference.searchable, cols="80,.^10,.^10"]
+|===
+
+h|[.header-title]##Configuration property##
+h|Type
+h|Default
+
+a|icon:lock[title=Fixed at build time] [[quarkus-http-idempotency_quarkus-idempotency-buffer-request-body]] [.property-path]##link:#quarkus-http-idempotency_quarkus-idempotency-buffer-request-body[`+++quarkus.idempotency.buffer-request-body+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.idempotency.buffer-request-body+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Whether to force full request-body buffering on all routes. The body must be buffered for the filter to fingerprint it on reactive endpoints, but forcing it converts every streaming endpoint in the application to buffered (bounded by `quarkus.http.limits.max-body-size`), not just idempotent ones. Disable this if you do not fingerprint request bodies, or if your application already buffers the bodies it needs, to avoid the app-wide blast radius.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_IDEMPOTENCY_BUFFER_REQUEST_BODY+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_IDEMPOTENCY_BUFFER_REQUEST_BODY+++`
+endif::add-copy-button-to-env-var[]
+--
+|boolean
+|`+++true+++`
+
+a| [[quarkus-http-idempotency_quarkus-idempotency-enabled]] [.property-path]##link:#quarkus-http-idempotency_quarkus-idempotency-enabled[`+++quarkus.idempotency.enabled+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.idempotency.enabled+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Whether the idempotency filter is active.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_IDEMPOTENCY_ENABLED+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_IDEMPOTENCY_ENABLED+++`
+endif::add-copy-button-to-env-var[]
+--
+|boolean
+|`+++true+++`
+
+a| [[quarkus-http-idempotency_quarkus-idempotency-header-name]] [.property-path]##link:#quarkus-http-idempotency_quarkus-idempotency-header-name[`+++quarkus.idempotency.header-name+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.idempotency.header-name+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Name of the request header carrying the idempotency key.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_IDEMPOTENCY_HEADER_NAME+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_IDEMPOTENCY_HEADER_NAME+++`
+endif::add-copy-button-to-env-var[]
+--
+|string
+|`+++Idempotency-Key+++`
+
+a| [[quarkus-http-idempotency_quarkus-idempotency-methods]] [.property-path]##link:#quarkus-http-idempotency_quarkus-idempotency-methods[`+++quarkus.idempotency.methods+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.idempotency.methods+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+HTTP methods subject to idempotency when the key header is present. Replaying a stored response for a safe/naturally-idempotent method would mask fresh data, so only unsafe methods belong here.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_IDEMPOTENCY_METHODS+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_IDEMPOTENCY_METHODS+++`
+endif::add-copy-button-to-env-var[]
+--
+|list of string
+|`+++POST+++`, `+++PATCH+++`
+
+a| [[quarkus-http-idempotency_quarkus-idempotency-strategy]] [.property-path]##link:#quarkus-http-idempotency_quarkus-idempotency-strategy[`+++quarkus.idempotency.strategy+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.idempotency.strategy+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+How endpoints are selected for idempotency.
+
+ * `all-methods` (default): every request using a guarded `methods()` is handled; an `Idempotent` annotation can opt individual endpoints in or out.
+ * `annotated`: only endpoints carrying `Idempotent` are handled, regardless of HTTP method.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_IDEMPOTENCY_STRATEGY+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_IDEMPOTENCY_STRATEGY+++`
+endif::add-copy-button-to-env-var[]
+--
+a|`all-methods`, `annotated`
+|`+++all-methods+++`
+
+a| [[quarkus-http-idempotency_quarkus-idempotency-require-key]] [.property-path]##link:#quarkus-http-idempotency_quarkus-idempotency-require-key[`+++quarkus.idempotency.require-key+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.idempotency.require-key+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Whether a guarded request MUST carry the key header. When `true`, a matching request without a valid key is rejected with HTTP 400.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_IDEMPOTENCY_REQUIRE_KEY+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_IDEMPOTENCY_REQUIRE_KEY+++`
+endif::add-copy-button-to-env-var[]
+--
+|boolean
+|`+++false+++`
+
+a| [[quarkus-http-idempotency_quarkus-idempotency-max-key-length]] [.property-path]##link:#quarkus-http-idempotency_quarkus-idempotency-max-key-length[`+++quarkus.idempotency.max-key-length+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.idempotency.max-key-length+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Maximum accepted length of an idempotency key. Longer keys are rejected with HTTP 400.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_IDEMPOTENCY_MAX_KEY_LENGTH+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_IDEMPOTENCY_MAX_KEY_LENGTH+++`
+endif::add-copy-button-to-env-var[]
+--
+|int
+|`+++255+++`
+
+a| [[quarkus-http-idempotency_quarkus-idempotency-require-identity]] [.property-path]##link:#quarkus-http-idempotency_quarkus-idempotency-require-identity[`+++quarkus.idempotency.require-identity+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.idempotency.require-identity+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Whether a guarded, keyed request MUST come from an authenticated principal. When `true`, a request carrying the key header but no authenticated identity is rejected with HTTP 401. This closes the cross-caller replay window on anonymous traffic: with no identity to scope by, all anonymous callers would otherwise share one namespace. Leave `false` only when idempotent endpoints are intentionally anonymous and their responses carry no per-caller data.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_IDEMPOTENCY_REQUIRE_IDENTITY+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_IDEMPOTENCY_REQUIRE_IDENTITY+++`
+endif::add-copy-button-to-env-var[]
+--
+|boolean
+|`+++false+++`
+
+a| [[quarkus-http-idempotency_quarkus-idempotency-scope-header]] [.property-path]##link:#quarkus-http-idempotency_quarkus-idempotency-scope-header[`+++quarkus.idempotency.scope-header+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.idempotency.scope-header+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Optional request header whose value adds a second isolation dimension (e.g. a tenant id) to the storage namespace, on top of the authenticated principal. Use this for multi-tenant deployments where the tenant is carried in a trusted, gateway-validated header. When unset, scoping is by principal only.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_IDEMPOTENCY_SCOPE_HEADER+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_IDEMPOTENCY_SCOPE_HEADER+++`
+endif::add-copy-button-to-env-var[]
+--
+|string
+|
+
+a| [[quarkus-http-idempotency_quarkus-idempotency-max-entries]] [.property-path]##link:#quarkus-http-idempotency_quarkus-idempotency-max-entries[`+++quarkus.idempotency.max-entries+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.idempotency.max-entries+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Maximum number of entries the in-memory store retains. Acts as a hard memory ceiling: once reached, the least-recently-used entries are evicted. Has no effect on the `redis` store.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_IDEMPOTENCY_MAX_ENTRIES+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_IDEMPOTENCY_MAX_ENTRIES+++`
+endif::add-copy-button-to-env-var[]
+--
+|int
+|`+++100000+++`
+
+a| [[quarkus-http-idempotency_quarkus-idempotency-max-stored-body]] [.property-path]##link:#quarkus-http-idempotency_quarkus-idempotency-max-stored-body[`+++quarkus.idempotency.max-stored-body+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.idempotency.max-stored-body+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Maximum size of a response body that will be stored for replay. Responses larger than this are not cached (the request passes through and the key is released), bounding per-entry memory. Measured from `Content-Length` or a `byte++[]++`/`String` entity; entities whose size cannot be determined cheaply are stored regardless.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_IDEMPOTENCY_MAX_STORED_BODY+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_IDEMPOTENCY_MAX_STORED_BODY+++`
+endif::add-copy-button-to-env-var[]
+--
+|MemorySize link:#memory-size-note-anchor-quarkus-http-idempotency_quarkus-idempotency[icon:question-circle[title=More information about the MemorySize format]]
+|`+++256K+++`
+
+a| [[quarkus-http-idempotency_quarkus-idempotency-max-fingerprint-body]] [.property-path]##link:#quarkus-http-idempotency_quarkus-idempotency-max-fingerprint-body[`+++quarkus.idempotency.max-fingerprint-body+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.idempotency.max-fingerprint-body+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Maximum number of request-body bytes fed into the payload fingerprint. Caps the CPU and allocation an attacker can drive with a large allowed body; bytes beyond this bound are not hashed (the true body length is still mixed in, so truncation does not cause collisions).
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_IDEMPOTENCY_MAX_FINGERPRINT_BODY+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_IDEMPOTENCY_MAX_FINGERPRINT_BODY+++`
+endif::add-copy-button-to-env-var[]
+--
+|MemorySize link:#memory-size-note-anchor-quarkus-http-idempotency_quarkus-idempotency[icon:question-circle[title=More information about the MemorySize format]]
+|`+++1M+++`
+
+a| [[quarkus-http-idempotency_quarkus-idempotency-captured-headers]] [.property-path]##link:#quarkus-http-idempotency_quarkus-idempotency-captured-headers[`+++quarkus.idempotency.captured-headers+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.idempotency.captured-headers+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Response headers captured and replayed, as an explicit allow-list. Security-sensitive headers (`Set-Cookie`, `Authorization`, `WWW-Authenticate`, and similar) are always denied even if listed here, so a stored response can never leak credentials on replay.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_IDEMPOTENCY_CAPTURED_HEADERS+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_IDEMPOTENCY_CAPTURED_HEADERS+++`
+endif::add-copy-button-to-env-var[]
+--
+|list of string
+|`+++Location+++`
+
+a| [[quarkus-http-idempotency_quarkus-idempotency-response-ttl]] [.property-path]##link:#quarkus-http-idempotency_quarkus-idempotency-response-ttl[`+++quarkus.idempotency.response-ttl+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.idempotency.response-ttl+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+How long a completed response remains replayable.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_IDEMPOTENCY_RESPONSE_TTL+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_IDEMPOTENCY_RESPONSE_TTL+++`
+endif::add-copy-button-to-env-var[]
+--
+|link:https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/time/Duration.html[Duration] link:#duration-note-anchor-quarkus-http-idempotency_quarkus-idempotency[icon:question-circle[title=More information about the Duration format]]
+|`+++24H+++`
+
+a| [[quarkus-http-idempotency_quarkus-idempotency-lock-ttl]] [.property-path]##link:#quarkus-http-idempotency_quarkus-idempotency-lock-ttl[`+++quarkus.idempotency.lock-ttl+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.idempotency.lock-ttl+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+How long an in-flight reservation is held before it is considered stale (so a crashed request does not block retries forever).
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_IDEMPOTENCY_LOCK_TTL+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_IDEMPOTENCY_LOCK_TTL+++`
+endif::add-copy-button-to-env-var[]
+--
+|link:https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/time/Duration.html[Duration] link:#duration-note-anchor-quarkus-http-idempotency_quarkus-idempotency[icon:question-circle[title=More information about the Duration format]]
+|`+++60S+++`
+
+a| [[quarkus-http-idempotency_quarkus-idempotency-fingerprint-enabled]] [.property-path]##link:#quarkus-http-idempotency_quarkus-idempotency-fingerprint-enabled[`+++quarkus.idempotency.fingerprint-enabled+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.idempotency.fingerprint-enabled+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Whether to fingerprint the request payload. When enabled, reusing a key with a different payload is rejected with HTTP 422; when disabled, the key alone identifies the request.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_IDEMPOTENCY_FINGERPRINT_ENABLED+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_IDEMPOTENCY_FINGERPRINT_ENABLED+++`
+endif::add-copy-button-to-env-var[]
+--
+|boolean
+|`+++true+++`
+
+a| [[quarkus-http-idempotency_quarkus-idempotency-cache-error-responses]] [.property-path]##link:#quarkus-http-idempotency_quarkus-idempotency-cache-error-responses[`+++quarkus.idempotency.cache-error-responses+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.idempotency.cache-error-responses+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Whether to store and replay 5xx responses. When `false` (the default), a server error releases the key so the client can genuinely retry a transient failure.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_IDEMPOTENCY_CACHE_ERROR_RESPONSES+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_IDEMPOTENCY_CACHE_ERROR_RESPONSES+++`
+endif::add-copy-button-to-env-var[]
+--
+|boolean
+|`+++false+++`
+
+a| [[quarkus-http-idempotency_quarkus-idempotency-replayed-header]] [.property-path]##link:#quarkus-http-idempotency_quarkus-idempotency-replayed-header[`+++quarkus.idempotency.replayed-header+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.idempotency.replayed-header+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Header added to a replayed response so clients and observability can distinguish replays. Set to empty to disable.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_IDEMPOTENCY_REPLAYED_HEADER+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_IDEMPOTENCY_REPLAYED_HEADER+++`
+endif::add-copy-button-to-env-var[]
+--
+|string
+|`+++Idempotent-Replayed+++`
+
+a| [[quarkus-http-idempotency_quarkus-idempotency-store]] [.property-path]##link:#quarkus-http-idempotency_quarkus-idempotency-store[`+++quarkus.idempotency.store+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.idempotency.store+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Store backend: `in-memory` (default, single node) or `redis` (distributed, requires `quarkus-redis-client` on the classpath).
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_IDEMPOTENCY_STORE+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_IDEMPOTENCY_STORE+++`
+endif::add-copy-button-to-env-var[]
+--
+|string
+|`+++in-memory+++`
+
+a| [[quarkus-http-idempotency_quarkus-idempotency-problem-base-uri]] [.property-path]##link:#quarkus-http-idempotency_quarkus-idempotency-problem-base-uri[`+++quarkus.idempotency.problem-base-uri+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.idempotency.problem-base-uri+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Base documentation URI used to build the `type` field (and `Link` header) of the RFC 9457 `application/problem{plus}json` error responses. A per-problem fragment is appended (e.g. `++#++idempotency-key-conflict`) so clients can follow the link to the relevant documentation, as the Idempotency-Key draft recommends.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_IDEMPOTENCY_PROBLEM_BASE_URI+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_IDEMPOTENCY_PROBLEM_BASE_URI+++`
+endif::add-copy-button-to-env-var[]
+--
+|string
+|`+++https://docs.quarkiverse.io/quarkus-http-idempotency/dev/+++`
+
+|===
+
+ifndef::no-duration-note[]
+[NOTE]
+[id=duration-note-anchor-quarkus-http-idempotency_quarkus-idempotency]
+.About the Duration format
+====
+To write duration values, use the standard `java.time.Duration` format.
+See the link:https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/time/Duration.html#parse(java.lang.CharSequence)[Duration#parse() Java API documentation] for more information.
+
+You can also use a simplified format, starting with a number:
+
+* If the value is only a number, it represents time in seconds.
+* If the value is a number followed by `ms`, it represents time in milliseconds.
+
+In other cases, the simplified format is translated to the `java.time.Duration` format for parsing:
+
+* If the value is a number followed by `h`, `m`, or `s`, it is prefixed with `PT`.
+* If the value is a number followed by `d`, it is prefixed with `P`.
+====
+endif::no-duration-note[]
+ifndef::no-memory-size-note[]
+[NOTE]
+[id=memory-size-note-anchor-quarkus-http-idempotency_quarkus-idempotency]
+.About the MemorySize format
+====
+A size configuration option recognizes strings in this format (shown as a regular expression): `[0-9]+[KkMmGgTtPpEeZzYy]?`.
+
+If no suffix is given, assume bytes.
+====
+endif::no-memory-size-note[]
