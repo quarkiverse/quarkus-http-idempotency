@@ -50,6 +50,35 @@ curl -i -H "Idempotency-Key: 8e039...f932" \
 # Idempotent-Replayed: true
 ----
 
+=== On the server
+
+There is *nothing to write*. The extension installs a request filter, so every `POST` and `PATCH`
+endpoint in the application is guarded as soon as the dependency is on the classpath — no annotation,
+no wrapper, no change to your resource methods. You only ever touch configuration: narrow or widen
+the guarded methods, rename the header, require a key, or pick a store (see <<extension-configuration-reference>>).
+
+To make the key mandatory on guarded methods (recommended for write APIs), so a request without one
+is rejected with `400` instead of silently passing through:
+
+[source,properties]
+----
+quarkus.idempotency.require-key=true
+----
+
+=== On the client
+
+The client owns the key. Three rules keep it correct:
+
+* **One key per logical operation.** Generate a fresh value (a UUID v4 is ideal) when the user first
+triggers the action, *before* the first attempt.
+* **Reuse the same key for every retry** of that operation — that is what lets the server recognise
+the retry and replay instead of re-running it.
+* **Never reuse a key for a different request.** A key sent with a different method, path, query, or
+body is rejected with `422` (see <<errors>>), which protects against an accidental key collision.
+
+A replayed response carries the `Idempotent-Replayed: true` header, so the client (and your
+observability) can tell a replay from a fresh execution.
+
 == How it works
 
 For a guarded request that carries a key, the extension applies this policy:
@@ -191,35 +220,6 @@ At startup the extension logs the active store, which makes a misconfiguration o
 Idempotency active: store=redis (RedisIdempotencyStore), methods=[POST], header=Idempotency-Key, response-ttl=PT10M
 ----
 
-== Configuration reference
-
-All properties are runtime configuration under the `quarkus.idempotency` prefix.
-
-[cols="2,1,3",options="header"]
-|===
-| Property | Default | Description
-
-| `quarkus.idempotency.enabled` | `true` | Master switch.
-| `quarkus.idempotency.header-name` | `Idempotency-Key` | Request header carrying the key.
-| `quarkus.idempotency.methods` | `POST,PATCH` | HTTP methods guarded when the header is present.
-| `quarkus.idempotency.require-key` | `false` | Require the key on guarded methods (otherwise `400`).
-| `quarkus.idempotency.require-identity` | `false` | Reject keyed requests from anonymous callers with `401`. See <<security>>.
-| `quarkus.idempotency.scope-header` | _(unset)_ | Trusted request header (e.g. a tenant id) added as a second isolation dimension. See <<security>>.
-| `quarkus.idempotency.max-key-length` | `255` | Reject longer keys with `400` (also rejects control characters).
-| `quarkus.idempotency.max-entries` | `100000` | In-memory store hard ceiling on entry count (LRU eviction). No effect on Redis.
-| `quarkus.idempotency.max-stored-body` | `256K` | Responses larger than this are not cached (measured from `Content-Length`/`byte[]`/`String`).
-| `quarkus.idempotency.max-fingerprint-body` | `1M` | Cap on request-body bytes hashed into the fingerprint.
-| `quarkus.idempotency.captured-headers` | `Location` | Allow-list of response headers replayed; credential headers are always denied.
-| `quarkus.idempotency.response-ttl` | `24h` | How long a completed response stays replayable.
-| `quarkus.idempotency.lock-ttl` | `60s` | In-flight reservation timeout. Must exceed worst-case handler latency.
-| `quarkus.idempotency.fingerprint-enabled` | `true` | Fingerprint the payload (needed for the `422` mismatch check).
-| `quarkus.idempotency.cache-error-responses` | `false` | Store and replay `5xx` responses too; otherwise a `5xx` releases the key so the client can retry.
-| `quarkus.idempotency.replayed-header` | `Idempotent-Replayed` | Header added on a replay (empty to disable).
-| `quarkus.idempotency.store` | `in-memory` | Store backend: `in-memory` or `redis`.
-| `quarkus.idempotency.problem-base-uri` | `https://docs.quarkiverse.io/quarkus-http-idempotency/dev/` | Documentation base URI used in the `type`/`Link` of `problem+json` errors. See <<errors>>.
-| `quarkus.idempotency.buffer-request-body` | `true` | _(build time)_ Force app-wide request-body buffering so reactive bodies can be fingerprinted. See <<security>>.
-|===
-
 [[security]]
 == Security model
 
@@ -292,6 +292,11 @@ do not need body fingerprinting.
 * The in-memory store is per-instance — use the Redis store for clustered deployments.
 
 [[extension-configuration-reference]]
-== Extension configuration reference
+== Configuration reference
 
-See the table above; all keys take effect at runtime.
+All properties live under the `quarkus.idempotency` prefix and — apart from
+`buffer-request-body`, which is fixed at build time — take effect at runtime. For the security
+implications of `require-identity`, `scope-header`, `max-entries`, `max-stored-body`, and
+`captured-headers`, see <<security>>; for `problem-base-uri`, see <<errors>>.
+
+include::includes/quarkus-http-idempotency.adoc[leveloffset=+1, opts=optional]
