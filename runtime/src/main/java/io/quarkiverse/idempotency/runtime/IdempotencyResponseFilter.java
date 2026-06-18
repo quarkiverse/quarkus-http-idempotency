@@ -18,6 +18,7 @@ package io.quarkiverse.idempotency.runtime;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Flow;
@@ -102,13 +103,13 @@ public class IdempotencyResponseFilter implements ContainerResponseFilter {
 
         int status = responseContext.getStatus();
         if (status >= 500 && !config.cacheErrorResponses()) {
-            fire(store.get().release(key));
+            release(key);
             return;
         }
 
         if (isStreaming(responseContext)) {
             LOG.debug("Streaming response on an idempotent request; not caching (key released)");
-            fire(store.get().release(key));
+            release(key);
             return;
         }
 
@@ -118,7 +119,7 @@ public class IdempotencyResponseFilter implements ContainerResponseFilter {
             if (size != null && size > limit) {
                 LOG.debugf("Response body (%s bytes) exceeds max-stored-body (%s); not caching",
                         size, Long.valueOf(limit));
-                fire(store.get().release(key));
+                release(key);
                 return;
             }
         }
@@ -136,13 +137,22 @@ public class IdempotencyResponseFilter implements ContainerResponseFilter {
     }
 
     /**
-     * Subscribe to the reactive store write without blocking the response. The reservation made at
-     * acquire time already guards concurrent retries, so the write does not need to complete before
+     * Release a reserved key whose response will not be stored (5xx, streaming, or oversize body), so
+     * the client can retry. Records the release for observability and frees the key asynchronously.
+     */
+    private void release(String key) {
+        metrics.onReleased();
+        fire(store.get().release(key));
+    }
+
+    /**
+     * Subscribe to a reactive store release without blocking the response. The reservation made at
+     * acquire time already guards concurrent retries, so the release does not need to complete before
      * the response is sent; failures are logged.
      */
-    private void fire(Uni<Void> write) {
-        write.subscribe().with(ignored -> {
-        }, failure -> LOG.error("Failed to persist idempotency state", failure));
+    private void fire(Uni<Void> release) {
+        release.subscribe().with(ignored -> {
+        }, failure -> LOG.error("Failed to release idempotency key", failure));
     }
 
     /**
@@ -186,7 +196,7 @@ public class IdempotencyResponseFilter implements ContainerResponseFilter {
 
     /** A header is denied if it is a known credential header or its name embeds a secret fragment. */
     private static boolean isDenied(String name) {
-        String normalized = name.trim().toLowerCase();
+        String normalized = name.trim().toLowerCase(Locale.ROOT);
         if (DENIED_HEADERS.contains(normalized)) {
             return true;
         }

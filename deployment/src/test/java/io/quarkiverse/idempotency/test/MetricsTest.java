@@ -17,7 +17,6 @@ package io.quarkiverse.idempotency.test;
 
 import static io.restassured.RestAssured.given;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import jakarta.inject.Inject;
 
@@ -31,29 +30,35 @@ import io.restassured.http.Header;
 
 /**
  * When {@code quarkus-micrometer} is on the classpath, idempotency outcomes are recorded on the
- * {@code idempotency.requests} counter tagged by {@code outcome}. The outcome counters are
- * incremented synchronously while the request is resolved, so they are readable right after.
+ * {@code idempotency.requests} counter (tagged by {@code outcome}) plus the {@code entries.stored} and
+ * {@code entries.released} counters. Outcome counters are incremented synchronously while the request
+ * is resolved; the persist/release counters are recorded fire-and-forget, so they are awaited.
  */
 public class MetricsTest {
 
     @RegisterExtension
     static final QuarkusUnitTest TEST = new QuarkusUnitTest()
-            .withApplicationRoot(jar -> jar.addClass(PaymentResource.class));
+            .withApplicationRoot(jar -> jar.addClasses(PaymentResource.class, Await.class));
 
     @Inject
     MeterRegistry registry;
 
-    private double count(String outcome) {
+    private double outcome(String outcome) {
         Counter c = registry.find("idempotency.requests").tag("outcome", outcome).counter();
+        return c == null ? 0d : c.count();
+    }
+
+    private double counter(String name) {
+        Counter c = registry.find(name).counter();
         return c == null ? 0d : c.count();
     }
 
     @Test
     void outcomesAreCounted() {
         String body = "{\"amount\":1000}";
-        double fresh0 = count("fresh");
-        double replay0 = count("replay");
-        double mismatch0 = count("mismatch");
+        double fresh0 = outcome("fresh");
+        double replay0 = outcome("replay");
+        double mismatch0 = outcome("mismatch");
 
         // Fresh: new key, runs the operation.
         given().header(new Header("Idempotency-Key", "mk-1")).contentType("application/json").body(body)
@@ -66,9 +71,29 @@ public class MetricsTest {
         given().header(new Header("Idempotency-Key", "mk-1")).contentType("application/json").body("{\"amount\":2}")
                 .when().post("/payments/charge").then().statusCode(422);
 
-        assertEquals(fresh0 + 1, count("fresh"), 0.001, "fresh outcome counted");
-        assertEquals(replay0 + 1, count("replay"), 0.001, "replay outcome counted");
-        assertEquals(mismatch0 + 1, count("mismatch"), 0.001, "mismatch outcome counted");
-        assertTrue(count("conflict") >= 0, "conflict counter registered");
+        assertEquals(fresh0 + 1, outcome("fresh"), 0.001, "fresh outcome counted");
+        assertEquals(replay0 + 1, outcome("replay"), 0.001, "replay outcome counted");
+        assertEquals(mismatch0 + 1, outcome("mismatch"), 0.001, "mismatch outcome counted");
+    }
+
+    @Test
+    void storedIsCountedOnFreshSuccess() {
+        double stored0 = counter("idempotency.entries.stored");
+
+        given().header(new Header("Idempotency-Key", "st-1")).contentType("application/json").body("{}")
+                .when().post("/payments/charge").then().statusCode(200);
+
+        Await.until(() -> counter("idempotency.entries.stored") >= stored0 + 1, "stored counted after persist");
+    }
+
+    @Test
+    void releasedIsCountedForStreaming() {
+        double released0 = counter("idempotency.entries.released");
+
+        // A streaming response cannot be captured, so the reserved key is released, not stored.
+        given().header(new Header("Idempotency-Key", "rl-1")).contentType("application/json").body("{}")
+                .when().post("/payments/charge-stream").then().statusCode(200);
+
+        Await.until(() -> counter("idempotency.entries.released") >= released0 + 1, "released counted for stream");
     }
 }

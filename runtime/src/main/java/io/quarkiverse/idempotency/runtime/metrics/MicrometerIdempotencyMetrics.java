@@ -41,6 +41,7 @@ public class MicrometerIdempotencyMetrics implements IdempotencyMetrics {
     private final Counter conflict;
     private final Counter mismatch;
     private final Counter stored;
+    private final Counter released;
     private final Counter storeErrors;
 
     @Inject
@@ -51,6 +52,9 @@ public class MicrometerIdempotencyMetrics implements IdempotencyMetrics {
         this.mismatch = outcome(registry, "mismatch");
         this.stored = Counter.builder("idempotency.entries.stored")
                 .description("Responses captured and persisted for replay")
+                .register(registry);
+        this.released = Counter.builder("idempotency.entries.released")
+                .description("Reserved keys released without storing a response (5xx, streaming, or oversize)")
                 .register(registry);
         this.storeErrors = Counter.builder("idempotency.store.errors")
                 .description("Idempotency store operation failures")
@@ -87,6 +91,11 @@ public class MicrometerIdempotencyMetrics implements IdempotencyMetrics {
     @Override
     public void onStored() {
         stored.increment();
+    }
+
+    @Override
+    public void onReleased() {
+        released.increment();
     }
 
     @Override

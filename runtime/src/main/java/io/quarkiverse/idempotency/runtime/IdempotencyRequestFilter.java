@@ -19,7 +19,11 @@ import java.lang.reflect.Method;
 import java.net.URI;
 import java.security.Principal;
 import java.time.Duration;
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -110,6 +114,16 @@ public class IdempotencyRequestFilter implements ContainerRequestFilter {
     @Context
     ResourceInfo resourceInfo;
 
+    /** Guarded HTTP methods, upper-cased once so method matching is case-insensitive. */
+    private volatile Set<String> guardedMethods;
+
+    @PostConstruct
+    void init() {
+        guardedMethods = config.methods().stream()
+                .map(method -> method.trim().toUpperCase(Locale.ROOT))
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
     @Override
     public void filter(ContainerRequestContext requestContext) {
         if (!config.enabled()) {
@@ -190,6 +204,7 @@ public class IdempotencyRequestFilter implements ContainerRequestFilter {
             Object activeKey = rc.get(KEY_ATTR);
             if (activeKey != null && rc.get(HANDLED_ATTR) == null) {
                 LOG.debug("Response completed without capture (streaming?); releasing idempotency key");
+                metrics.onReleased();
                 store.get().release((String) activeKey).subscribe().with(ignored -> {
                 }, t -> LOG.debug("Idempotency key release on response end failed", t));
             }
@@ -248,7 +263,7 @@ public class IdempotencyRequestFilter implements ContainerRequestFilter {
         if (config.strategy() == IdempotencyConfig.Strategy.ANNOTATED) {
             return false;
         }
-        return config.methods().contains(httpMethod);
+        return httpMethod != null && guardedMethods.contains(httpMethod.toUpperCase(Locale.ROOT));
     }
 
     private boolean effectiveRequireKey(IdempotencyMethodRegistry.MethodPolicy policy) {

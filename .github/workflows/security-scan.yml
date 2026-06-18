@@ -1,0 +1,37 @@
+name: Security Scan
+
+on:
+  push:
+    branches:
+      - "main"
+  pull_request:
+  schedule:
+    # Weekly, so newly-disclosed CVEs in unchanged dependencies are still caught.
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  trivy:
+    name: Trivy dependency scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan dependencies for known vulnerabilities
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          # Only fail on issues that have a fix available upstream, so an unpatchable
+          # transitive CVE does not block every PR; weekly runs still surface them.
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table

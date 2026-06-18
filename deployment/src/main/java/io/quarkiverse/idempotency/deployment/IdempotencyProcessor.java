@@ -120,11 +120,8 @@ class IdempotencyProcessor {
             ChronoUnit unit = instance.value("ttlUnit") == null
                     ? ChronoUnit.SECONDS
                     : ChronoUnit.valueOf(instance.value("ttlUnit").asEnum());
-            // ChronoUnit#getDuration is exact for SECONDS..DAYS and estimated above that — fine for a TTL,
-            // and avoids Duration.of throwing on estimated units.
-            long ttlMillis = ttl > 0 ? unit.getDuration().multipliedBy(ttl).toMillis() : -1L;
-
             AnnotationTarget target = instance.target();
+            long ttlMillis = toMillis(ttl, unit, target);
             if (target.kind() == AnnotationTarget.Kind.METHOD) {
                 MethodInfo method = target.asMethod();
                 recorder.registerMethod(method.declaringClass().name().toString(), method.name(),
@@ -137,6 +134,35 @@ class IdempotencyProcessor {
 
     private static boolean boolValue(AnnotationValue value, boolean defaultValue) {
         return value == null ? defaultValue : value.asBoolean();
+    }
+
+    /**
+     * Convert an {@link Idempotent} ttl/unit to milliseconds. {@code ChronoUnit#getDuration} is exact
+     * for {@code SECONDS..DAYS} and estimated above that — fine for a TTL. Guards the multiplication so
+     * an oversized ttl/unit (e.g. {@code FOREVER}) fails the build with a clear message instead of an
+     * opaque {@link ArithmeticException}.
+     *
+     * @return the ttl in milliseconds, or {@code -1} to inherit the global response TTL
+     */
+    private static long toMillis(long ttl, ChronoUnit unit, AnnotationTarget target) {
+        if (ttl <= 0) {
+            return -1L;
+        }
+        try {
+            return unit.getDuration().multipliedBy(ttl).toMillis();
+        } catch (ArithmeticException overflow) {
+            throw new IllegalStateException("@Idempotent ttl=" + ttl + " " + unit + " on " + describe(target)
+                    + " is too large to represent in milliseconds; use a smaller ttl or a finer ttlUnit "
+                    + "(SECONDS..DAYS).", overflow);
+        }
+    }
+
+    private static String describe(AnnotationTarget target) {
+        if (target.kind() == AnnotationTarget.Kind.METHOD) {
+            MethodInfo method = target.asMethod();
+            return method.declaringClass().name() + "#" + method.name();
+        }
+        return target.asClass().name().toString();
     }
 
     private static boolean isPresent(String className) {
