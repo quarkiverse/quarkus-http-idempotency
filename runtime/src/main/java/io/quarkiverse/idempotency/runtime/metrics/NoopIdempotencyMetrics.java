@@ -49,6 +49,10 @@ public class NoopIdempotencyMetrics implements IdempotencyMetrics {
     }
 
     @Override
+    public void onReleased() {
+    }
+
+    @Override
     public void onStoreError() {
     }
 }

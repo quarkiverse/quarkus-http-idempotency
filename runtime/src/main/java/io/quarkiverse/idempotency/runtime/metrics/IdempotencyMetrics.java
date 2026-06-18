@@ -37,6 +37,13 @@ public interface IdempotencyMetrics {
     /** A response was captured and persisted for future replay. */
     void onStored();
 
+    /**
+     * A reserved key was released without storing a response — a 5xx (when error responses are not
+     * cached), a streaming response, or a body over {@code max-stored-body}. The operation ran but is
+     * not replayable, so the client may retry.
+     */
+    void onReleased();
+
     /** A store operation failed. */
     void onStoreError();
 }
