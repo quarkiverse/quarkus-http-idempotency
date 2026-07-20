@@ -73,6 +73,83 @@ security model.
 - **`in-memory`** (default) — single-node, bounded by `max-entries`.
 - **`redis`** — add `quarkus-redis-client`, set `quarkus.idempotency.store=redis`. Reserves a key
   with a single atomic `SET NX GET PX` round-trip (requires Redis 7.0+).
+- **`jdbc`** — add `quarkus-agroal` and a JDBC driver (`quarkus-jdbc-postgresql`, `-mysql`,
+  `-oracle`, `-mssql`, …), set `quarkus.idempotency.store=jdbc`. Works on any relational database:
+  the reservation is atomic through the primary key (the `INSERT` either wins or fails with an
+  integrity violation) and an expired key is reclaimed with a single conditional `UPDATE`. JDBC is
+  blocking, so each call runs on a worker thread; prefer `redis` for fully-reactive, high-throughput
+  workloads.
+
+### JDBC schema
+
+The extension never issues DDL; the application owns the table. Create it once with the shape below
+before enabling the store. The table name is configurable with `quarkus.idempotency.jdbc.table`
+(default `idempotency_entry`). The `response` column holds the serialized response as binary, and the
+two `*_expires_at` columns store epoch-millis as `BIGINT`.
+
+PostgreSQL:
+
+```sql
+CREATE TABLE idempotency_entry (
+    id                  VARCHAR(255) PRIMARY KEY,
+    fingerprint         VARCHAR(255),
+    in_flight           SMALLINT     NOT NULL,
+    response            BYTEA,
+    lock_expires_at     BIGINT       NOT NULL,
+    response_expires_at BIGINT
+);
+```
+
+MySQL / MariaDB:
+
+```sql
+CREATE TABLE idempotency_entry (
+    id                  VARCHAR(255) PRIMARY KEY,
+    fingerprint         VARCHAR(255),
+    in_flight           SMALLINT     NOT NULL,
+    response            LONGBLOB,
+    lock_expires_at     BIGINT       NOT NULL,
+    response_expires_at BIGINT
+);
+```
+
+Oracle (no `BIGINT`/`BOOLEAN` keywords, so `NUMBER` is used):
+
+```sql
+CREATE TABLE idempotency_entry (
+    id                  VARCHAR2(255) PRIMARY KEY,
+    fingerprint         VARCHAR2(255),
+    in_flight           NUMBER(1)     NOT NULL,
+    response            BLOB,
+    lock_expires_at     NUMBER(19)    NOT NULL,
+    response_expires_at NUMBER(19)
+);
+```
+
+SQL Server:
+
+```sql
+CREATE TABLE idempotency_entry (
+    id                  VARCHAR(255)   PRIMARY KEY,
+    fingerprint         VARCHAR(255),
+    in_flight           SMALLINT       NOT NULL,
+    response            VARBINARY(MAX),
+    lock_expires_at     BIGINT         NOT NULL,
+    response_expires_at BIGINT
+);
+```
+
+Expiry is enforced lazily on read: an expired entry is never replayed, it is reclaimed in place as a
+new reservation, so the store stays correct with no background job. A row whose key never comes back
+is only reclaimed if that key is seen again, so to bound table growth run a periodic purge (a cron
+job, a scheduled task, or `quarkus-scheduler` if you already depend on it) binding the current
+epoch-millis to both parameters:
+
+```sql
+DELETE FROM idempotency_entry
+ WHERE (in_flight = 1 AND lock_expires_at < ?)
+    OR (in_flight = 0 AND response_expires_at IS NOT NULL AND response_expires_at < ?);
+```
 
 ## Build
 
