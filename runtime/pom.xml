@@ -43,6 +43,13 @@
             <artifactId>quarkus-redis-client</artifactId>
             <optional>true</optional>
         </dependency>
+        <!-- Optional relational store backend; only used when quarkus.idempotency.store=jdbc. The
+             application supplies the concrete JDBC driver (quarkus-jdbc-postgresql, -mysql, …). -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-agroal</artifactId>
+            <optional>true</optional>
+        </dependency>
         <!-- Optional metrics: when present, idempotency outcomes are recorded via Micrometer. The
              extension never forces it onto applications that don't want metrics. -->
         <dependency>

@@ -205,13 +205,35 @@ public interface IdempotencyConfig {
     String replayedHeader();
 
     /**
-     * Store backend: {@code in-memory} (default, single node) or {@code redis} (distributed,
-     * requires {@code quarkus-redis-client} on the classpath).
+     * Store backend: {@code in-memory} (default, single node), {@code redis} (distributed, requires
+     * {@code quarkus-redis-client}), or {@code jdbc} (any relational database, requires
+     * {@code quarkus-agroal} and a JDBC driver).
      *
      * @return the store backend identifier
      */
     @WithDefault("in-memory")
     String store();
+
+    /**
+     * Settings for the {@code jdbc} store (see {@link #store()}).
+     *
+     * @return the JDBC store configuration
+     */
+    Jdbc jdbc();
+
+    /** Configuration for the {@code jdbc} store. */
+    interface Jdbc {
+
+        /**
+         * Name of the table holding idempotency entries. Must be a plain SQL identifier. The schema is
+         * owned by the application; the extension never issues DDL. See the documentation for the
+         * per-database {@code CREATE TABLE}.
+         *
+         * @return the idempotency table name
+         */
+        @WithDefault("idempotency_entry")
+        String table();
+    }
 
     /**
      * Base documentation URI used to build the {@code type} field (and {@code Link} header) of the

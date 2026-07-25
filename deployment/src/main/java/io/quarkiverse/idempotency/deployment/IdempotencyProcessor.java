@@ -31,6 +31,7 @@ import io.quarkiverse.idempotency.runtime.IdempotencyStartup;
 import io.quarkiverse.idempotency.runtime.Idempotent;
 import io.quarkiverse.idempotency.runtime.store.InMemoryIdempotencyStore;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
+import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
@@ -80,7 +81,7 @@ class IdempotencyProcessor {
     }
 
     @BuildStep
-    void beans(BuildProducer<AdditionalBeanBuildItem> beans) {
+    void beans(Capabilities capabilities, BuildProducer<AdditionalBeanBuildItem> beans) {
         AdditionalBeanBuildItem.Builder builder = AdditionalBeanBuildItem.builder()
                 .addBeanClass(IdempotencyStartup.class)
                 .addBeanClass(InMemoryIdempotencyStore.class)
@@ -91,6 +92,15 @@ class IdempotencyProcessor {
         // this processor never loads the redis-dependent class when redis is absent.
         if (isPresent("io.quarkus.redis.datasource.RedisDataSource")) {
             builder.addBeanClass("io.quarkiverse.idempotency.runtime.store.RedisIdempotencyStore");
+        }
+
+        // Register the JDBC store only when a JDBC datasource driver is present (each driver, e.g.
+        // quarkus-jdbc-postgresql, registers an "io.quarkus.jdbc.<db>" capability, all of which pull
+        // in Agroal). Resolved from the application model at build time, so it is reliable in both
+        // packaged applications and unit tests, and the agroal-dependent class is never loaded when
+        // no JDBC datasource is present.
+        if (capabilities.isCapabilityWithPrefixPresent("io.quarkus.jdbc")) {
+            builder.addBeanClass("io.quarkiverse.idempotency.runtime.store.JdbcIdempotencyStore");
         }
 
         // Register the Micrometer-backed metrics only when Micrometer is on the classpath, by class
