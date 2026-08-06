@@ -32,6 +32,7 @@ import io.quarkiverse.idempotency.runtime.Idempotent;
 import io.quarkiverse.idempotency.runtime.store.InMemoryIdempotencyStore;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.deployment.Capabilities;
+import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
@@ -94,12 +95,15 @@ class IdempotencyProcessor {
             builder.addBeanClass("io.quarkiverse.idempotency.runtime.store.RedisIdempotencyStore");
         }
 
-        // Register the JDBC store only when a JDBC datasource driver is present (each driver, e.g.
-        // quarkus-jdbc-postgresql, registers an "io.quarkus.jdbc.<db>" capability, all of which pull
-        // in Agroal). Resolved from the application model at build time, so it is reliable in both
-        // packaged applications and unit tests, and the agroal-dependent class is never loaded when
-        // no JDBC datasource is present.
-        if (capabilities.isCapabilityWithPrefixPresent("io.quarkus.jdbc")) {
+        // Register the JDBC store only when Agroal is present. The store needs an AgroalDataSource,
+        // and every JDBC driver extension (quarkus-jdbc-postgresql, -mysql, -h2, …) pulls in
+        // quarkus-agroal, which registers the AGROAL capability — so this is the reliable signal that
+        // a relational datasource is available. Do NOT gate on an "io.quarkus.jdbc.<db>" capability:
+        // only quarkus-jdbc-h2 registers one, while the production drivers (postgresql, mysql, mariadb,
+        // mssql, oracle, db2) do not, so that check silently excludes every real database.
+        // Resolved from the application model at build time (reliable in packaged apps and unit tests),
+        // and the agroal-dependent store class is never loaded when no datasource is present.
+        if (capabilities.isPresent(Capability.AGROAL)) {
             builder.addBeanClass("io.quarkiverse.idempotency.runtime.store.JdbcIdempotencyStore");
         }
 

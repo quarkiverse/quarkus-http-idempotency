@@ -396,7 +396,7 @@ endif::add-copy-button-to-config-props[]
 
 [.description]
 --
-Store backend: `in-memory` (default, single node) or `redis` (distributed, requires `quarkus-redis-client` on the classpath).
+Store backend: `in-memory` (default, single node), `redis` (distributed, requires `quarkus-redis-client`), or `jdbc` (any relational database, requires `quarkus-agroal` and a JDBC driver).
 
 
 ifdef::add-copy-button-to-env-var[]
@@ -408,6 +408,27 @@ endif::add-copy-button-to-env-var[]
 --
 |string
 |`+++in-memory+++`
+
+a| [[quarkus-http-idempotency_quarkus-idempotency-jdbc-table]] [.property-path]##link:#quarkus-http-idempotency_quarkus-idempotency-jdbc-table[`+++quarkus.idempotency.jdbc.table+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.idempotency.jdbc.table+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Name of the table holding idempotency entries. Must be a plain SQL identifier. The schema is owned by the application; the extension never issues DDL. See the documentation for the per-database `CREATE TABLE`.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_IDEMPOTENCY_JDBC_TABLE+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_IDEMPOTENCY_JDBC_TABLE+++`
+endif::add-copy-button-to-env-var[]
+--
+|string
+|`+++idempotency_entry+++`
 
 a| [[quarkus-http-idempotency_quarkus-idempotency-problem-base-uri]] [.property-path]##link:#quarkus-http-idempotency_quarkus-idempotency-problem-base-uri[`+++quarkus.idempotency.problem-base-uri+++`]##
 ifdef::add-copy-button-to-config-props[]

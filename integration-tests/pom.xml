@@ -37,6 +37,16 @@
             <artifactId>quarkus-junit5</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Regression coverage for the JDBC store gating: Agroal on the classpath with NO JDBC driver
+             extension (and no H2 anywhere in this module), so the only capability present is
+             io.quarkus.agroal and there is no io.quarkus.jdbc.<db> capability. This reproduces the
+             real-consumer setup — every production driver (PostgreSQL, MySQL, …) registers only the
+             Agroal capability, unlike H2 — that a prefix-based gating check silently excluded. -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-agroal</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>io.rest-assured</groupId>
             <artifactId>rest-assured</artifactId>
