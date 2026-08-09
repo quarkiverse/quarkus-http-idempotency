@@ -70,6 +70,33 @@ class StoredResponsesTest {
     }
 
     @Test
+    void rendersABodyWithAnUnknownMediaTypeAsJson() throws Exception {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("orderId", 42);
+        body.put("status", "CONFIRMED");
+        StoredEntry entry = new StoredEntry("fp",
+                new StoredResponse(201, Map.of(), body, null));
+
+        StoredEntry rendered = StoredResponses.materializeBody(entry, mapper);
+
+        Object entity = rendered.response().entity();
+        assertInstanceOf(byte[].class, entity);
+        assertArrayEquals(mapper.writeValueAsBytes(body), (byte[]) entity);
+    }
+
+    @Test
+    void keepsTheTextualFormForAKnownNonJsonMediaType() {
+        StoredEntry entry = new StoredEntry("fp",
+                new StoredResponse(200, Map.of(), 42, "text/plain"));
+
+        StoredEntry rendered = StoredResponses.materializeBody(entry, mapper);
+
+        Object entity = rendered.response().entity();
+        assertInstanceOf(byte[].class, entity);
+        assertArrayEquals("42".getBytes(StandardCharsets.UTF_8), (byte[]) entity);
+    }
+
+    @Test
     void leavesAByteArrayBodyUntouched() {
         byte[] bytes = "already-bytes".getBytes(StandardCharsets.UTF_8);
         StoredEntry entry = new StoredEntry("fp",
