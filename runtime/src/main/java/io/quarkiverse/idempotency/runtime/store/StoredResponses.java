@@ -69,7 +69,9 @@ final class StoredResponses {
                 // A String entity is written verbatim by RESTEasy (it is NOT re-encoded as a JSON
                 // string even for a JSON producer), so mirror that: take its bytes as-is.
                 body = text.getBytes(StandardCharsets.UTF_8);
-            } else if (mediaType != null && mediaType.toLowerCase(Locale.ROOT).contains("json")) {
+            } else if (mediaType == null || mediaType.toLowerCase(Locale.ROOT).contains("json")) {
+                // A Response built without an explicit .type(...) is captured with no media type, as
+                // the type is only negotiated later, when the MessageBodyWriter runs.
                 body = mapper.writeValueAsBytes(entity);
             } else {
                 body = String.valueOf(entity).getBytes(StandardCharsets.UTF_8);
