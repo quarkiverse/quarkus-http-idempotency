@@ -40,7 +40,7 @@
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
         <quarkus.version>3.37.3</quarkus.version>
-        <http-problem.version>3.38.1</http-problem.version>
+        <http-problem.version>3.38.2</http-problem.version>
     </properties>
 
     <modules>
