@@ -15,7 +15,6 @@
  */
 package io.quarkiverse.idempotency.runtime.store;
 
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
@@ -54,19 +53,27 @@ class BoundedStoreTest {
 
     @Test
     void evictedKeyCanBeAcquiredAgain() {
-        InMemoryIdempotencyStore store = new InMemoryIdempotencyStore(10);
-        store.acquire("first", "fp", LOCK).await().indefinitely();
-        store.complete("first", "fp", new StoredResponse(201, Map.of(), "ok", "text/plain"), TTL)
-                .await().indefinitely();
+        int maxEntries = 10;
+        int keyCount = 1_000;
+        InMemoryIdempotencyStore store = new InMemoryIdempotencyStore(maxEntries);
 
-        for (int i = 0; i < 1_000; i++) {
+        for (int i = 0; i < keyCount; i++) {
             String key = "later-" + i;
             store.acquire(key, "fp", LOCK).await().indefinitely();
             store.complete(key, "fp", new StoredResponse(201, Map.of(), "ok", "text/plain"), TTL)
                     .await().indefinitely();
         }
 
-        // "first" was long since evicted by size pressure, so it is a fresh acquisition again.
-        assertInstanceOf(Reservation.Acquired.class, store.acquire("first", "fp", LOCK).await().indefinitely());
+        assertTrue(store.estimatedSize() <= maxEntries);
+
+        // Caffeine does not guarantee which key is evicted under size pressure.
+        boolean reacquired = false;
+        for (int i = 0; i < keyCount; i++) {
+            if (store.acquire("later-" + i, "fp", LOCK).await().indefinitely() instanceof Reservation.Acquired) {
+                reacquired = true;
+                break;
+            }
+        }
+        assertTrue(reacquired, "at least one evicted key must be available for a fresh acquisition");
     }
 }

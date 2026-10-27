@@ -22,14 +22,14 @@ import static org.hamcrest.Matchers.nullValue;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import io.quarkus.test.QuarkusUnitTest;
+import io.quarkus.test.QuarkusExtensionTest;
 import io.restassured.http.Header;
 
 /** {@code @Idempotent} in the default {@code all-methods} strategy: per-endpoint opt-in/out + requireKey. */
 public class IdempotentAnnotationTest {
 
     @RegisterExtension
-    static final QuarkusUnitTest TEST = new QuarkusUnitTest()
+    static final QuarkusExtensionTest TEST = new QuarkusExtensionTest()
             .withApplicationRoot(jar -> jar.addClass(AnnotatedResource.class));
 
     @Test

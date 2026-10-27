@@ -22,7 +22,7 @@ import static org.hamcrest.Matchers.nullValue;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import io.quarkus.test.QuarkusUnitTest;
+import io.quarkus.test.QuarkusExtensionTest;
 import io.restassured.http.Header;
 
 /**
@@ -32,7 +32,7 @@ import io.restassured.http.Header;
 public class HeaderHygieneTest {
 
     @RegisterExtension
-    static final QuarkusUnitTest TEST = new QuarkusUnitTest()
+    static final QuarkusExtensionTest TEST = new QuarkusExtensionTest()
             .withApplicationRoot(jar -> jar.addClass(HeaderHygieneResource.class))
             // Operator mistakenly tries to capture credential headers; deny-list must override.
             .overrideConfigKey("quarkus.idempotency.captured-headers",

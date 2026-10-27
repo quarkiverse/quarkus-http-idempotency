@@ -7,6 +7,5 @@ metadata:
     - http
   categories:
     - web
-  status:
-    - experimental
+  status: experimental
   guide: https://docs.quarkiverse.io/quarkus-http-idempotency/dev/

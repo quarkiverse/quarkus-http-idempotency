@@ -39,7 +39,7 @@ import io.quarkiverse.idempotency.runtime.spi.IdempotencyStore;
 import io.quarkiverse.idempotency.runtime.spi.Reservation;
 import io.quarkiverse.idempotency.runtime.spi.StoredEntry;
 import io.quarkiverse.idempotency.runtime.spi.StoredResponse;
-import io.quarkus.test.QuarkusUnitTest;
+import io.quarkus.test.QuarkusExtensionTest;
 
 /**
  * Deterministic coverage of the JDBC store contract against a real (H2) database: the in-flight
@@ -49,7 +49,7 @@ import io.quarkus.test.QuarkusUnitTest;
 public class JdbcStoreContractTest {
 
     @RegisterExtension
-    static final QuarkusUnitTest TEST = new QuarkusUnitTest()
+    static final QuarkusExtensionTest TEST = new QuarkusExtensionTest()
             .withApplicationRoot(jar -> jar.addClass(PaymentResource.class))
             .withConfigurationResource("jdbc-store.properties");
 

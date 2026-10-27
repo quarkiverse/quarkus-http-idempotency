@@ -20,13 +20,13 @@ import static io.restassured.RestAssured.given;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import io.quarkus.test.QuarkusUnitTest;
+import io.quarkus.test.QuarkusExtensionTest;
 
 /** With a global {@code require-key=true}, {@code @Idempotent(requireKey = OPTIONAL)} relaxes it per endpoint. */
 public class OptionalRequireKeyTest {
 
     @RegisterExtension
-    static final QuarkusUnitTest TEST = new QuarkusUnitTest()
+    static final QuarkusExtensionTest TEST = new QuarkusExtensionTest()
             .withApplicationRoot(jar -> jar.addClass(OptionalKeyResource.class))
             .overrideConfigKey("quarkus.idempotency.require-key", "true");
 

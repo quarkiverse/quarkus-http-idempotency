@@ -22,7 +22,7 @@ import static org.hamcrest.Matchers.nullValue;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import io.quarkus.test.QuarkusUnitTest;
+import io.quarkus.test.QuarkusExtensionTest;
 import io.restassured.http.Header;
 
 /**
@@ -32,7 +32,7 @@ import io.restassured.http.Header;
 public class AnnotatedStrategyTest {
 
     @RegisterExtension
-    static final QuarkusUnitTest TEST = new QuarkusUnitTest()
+    static final QuarkusExtensionTest TEST = new QuarkusExtensionTest()
             .withApplicationRoot(jar -> jar.addClass(AnnotatedResource.class).addClass(PaymentResource.class))
             .overrideConfigKey("quarkus.idempotency.strategy", "annotated");
 
