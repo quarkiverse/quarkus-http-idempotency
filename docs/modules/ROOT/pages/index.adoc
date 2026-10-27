@@ -28,6 +28,17 @@ header is handled idempotently. The extension renders its error responses via `q
 so your application also needs a JSON provider — add `quarkus-rest-jackson` (or `quarkus-rest-jsonb`)
 if it does not have one already.
 
+=== Compatibility
+
+[cols="1,1",options="header"]
+|===
+| Extension | Quarkus
+
+| 0.3.x | 3.40+
+| 0.2.x | 3.37
+| 0.1.x | 3.37
+|===
+
 == Getting started
 
 The client generates a unique key (a UUID is recommended) and sends it on the request. Retrying
@@ -56,6 +67,8 @@ There is *nothing to write*. The extension installs a request filter, so every `
 endpoint in the application is guarded as soon as the dependency is on the classpath — no annotation,
 no wrapper, no change to your resource methods. You only ever touch configuration: narrow or widen
 the guarded methods, rename the header, require a key, or pick a store (see <<extension-configuration-reference>>).
+When a single endpoint needs different behavior, use the optional `@Idempotent` annotation
+(see <<per-endpoint-control>>).
 
 To make the key mandatory on guarded methods (recommended for write APIs), so a request without one
 is rejected with `400` instead of silently passing through:
@@ -137,6 +150,75 @@ https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-idempotency-key-header[
 header draft] (the Stripe pattern): the `409`/`422`/`400` status codes, the payload fingerprint, the
 composite (per-caller) cache key, and the documented expiry policy are all what the draft calls for.
 
+[[per-endpoint-control]]
+== Per-endpoint control
+
+The global configuration applies to every endpoint. To change the behavior of one resource method
+(or every method of one resource class), annotate it with `@Idempotent`:
+
+[source,java]
+----
+import java.time.temporal.ChronoUnit;
+
+import io.quarkiverse.idempotency.runtime.Idempotent;
+
+@Path("/orders")
+public class OrderResource {
+
+    // Key mandatory here, and the response kept for 24 hours instead of response-ttl
+    @POST
+    @Idempotent(requireKey = Idempotent.Require.REQUIRED, ttl = 24, ttlUnit = ChronoUnit.HOURS)
+    public Response create(Order order) { ... }
+
+    // Excluded even though POST is a guarded method
+    @POST
+    @Path("/search")
+    @Idempotent(enabled = false)
+    public List<Order> search(Query query) { ... }
+
+    // Opted in even though PUT is not a guarded method
+    @PUT
+    @Path("/{id}")
+    @Idempotent
+    public Response replace(@PathParam("id") String id, Order order) { ... }
+}
+----
+
+[cols="1,1,2",options="header"]
+|===
+| Attribute | Default | Meaning
+
+| `enabled` | `true` | `false` excludes the endpoint even if its HTTP method is guarded.
+| `requireKey` | `DEFAULT` | `REQUIRED` or `OPTIONAL` overrides `require-key` for this endpoint; `DEFAULT` inherits it.
+| `ttl` | `-1` | Response retention for this endpoint; a value `<= 0` inherits `response-ttl`.
+| `ttlUnit` | `SECONDS` | Unit of `ttl`.
+|===
+
+A method-level annotation takes precedence over a class-level one. To guard *only* annotated
+endpoints instead of every `POST`/`PATCH`, set:
+
+[source,properties]
+----
+quarkus.idempotency.strategy=annotated
+----
+
+The annotation is discovered at build time, so it works in native images. It only tunes whether and
+how the filter guards the endpoint; the key is still read from the header and per-caller scoping
+always applies. Keep these points in mind:
+
+* *It is not inherited.* Put it on the concrete resource class or method that JAX-RS dispatches to,
+not on a superclass or a resource interface. A class-level annotation applies only to methods
+declared on that class.
+* *Opting in a `GET` replays one stored representation* regardless of the retry's `Accept` or
+`Accept-Language`, because those headers are not part of the fingerprint. Use it only where the
+endpoint serves a single representation.
+* *`requireKey = OPTIONAL` overrides a global `require-key=true`*, so review annotations together
+with that setting.
+* *`ttl` can exceed the global `response-ttl`*, which keeps stored responses (and any data in them)
+for longer. Keep it within your retention policy.
+* *Replays skip in-method authorization* (see <<security>>). Opting in a `PUT` or `DELETE` whose
+access check is time- or state-sensitive and lives inside the method is the riskiest case.
+
 [[errors]]
 == Error responses
 
@@ -208,10 +290,113 @@ The Redis store reserves a key with a single atomic `SET key value NX GET PX ttl
 
 [IMPORTANT]
 ====
-The store path is blocking, so `quarkus.redis.max-pool-size` must be sized at or above the peak
-number of concurrent guarded requests. The default pool (6 connections + 24 wait queue) overflows
-under load and surfaces as HTTP 500 (`ConnectionPoolTooBusyException`).
+Every guarded request takes a connection from the Redis client pool for its store round-trips, so
+`quarkus.redis.max-pool-size` must be sized at or above the peak number of concurrent guarded
+requests. The default pool (6 connections + 24 wait queue) overflows under load and surfaces as
+HTTP 500 (`ConnectionPoolTooBusyException`). Size it to your real peak and alert on the `5xx` rate
+of guarded endpoints.
 ====
+
+=== JDBC (any relational database)
+
+For multi-instance deployments that already run a relational database, use the JDBC store. It works
+with any JDBC driver through the application's default datasource. Add Agroal and your driver, and
+select the store:
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.quarkus</groupId>
+    <artifactId>quarkus-agroal</artifactId>
+</dependency>
+<dependency>
+    <groupId>io.quarkus</groupId>
+    <artifactId>quarkus-jdbc-postgresql</artifactId> <!-- or -mysql, -mariadb, -oracle, -mssql, ... -->
+</dependency>
+----
+
+[source,properties]
+----
+quarkus.idempotency.store=jdbc
+# Optional, the default is idempotency_entry
+quarkus.idempotency.jdbc.table=idempotency_entry
+----
+
+A key is reserved atomically through the primary key (the `INSERT` either wins or fails with an
+integrity violation), and an expired key is reclaimed with a single conditional `UPDATE`. JDBC is
+blocking, so each store call runs on a worker thread; prefer the Redis store for fully reactive,
+high-throughput workloads.
+
+The extension never issues DDL: create the table once before enabling the store. The `response`
+column holds the serialized response as binary, and the two `*_expires_at` columns hold
+epoch-millis.
+
+[source,sql]
+.PostgreSQL
+----
+CREATE TABLE idempotency_entry (
+    id                  VARCHAR(255) PRIMARY KEY,
+    fingerprint         VARCHAR(255),
+    in_flight           SMALLINT     NOT NULL,
+    response            BYTEA,
+    lock_expires_at     BIGINT       NOT NULL,
+    response_expires_at BIGINT
+);
+----
+
+[source,sql]
+.MySQL / MariaDB
+----
+CREATE TABLE idempotency_entry (
+    id                  VARCHAR(255) PRIMARY KEY,
+    fingerprint         VARCHAR(255),
+    in_flight           SMALLINT     NOT NULL,
+    response            LONGBLOB,
+    lock_expires_at     BIGINT       NOT NULL,
+    response_expires_at BIGINT
+);
+----
+
+[source,sql]
+.Oracle
+----
+CREATE TABLE idempotency_entry (
+    id                  VARCHAR2(255) PRIMARY KEY,
+    fingerprint         VARCHAR2(255),
+    in_flight           NUMBER(1)     NOT NULL,
+    response            BLOB,
+    lock_expires_at     NUMBER(19)    NOT NULL,
+    response_expires_at NUMBER(19)
+);
+----
+
+[source,sql]
+.SQL Server
+----
+CREATE TABLE idempotency_entry (
+    id                  VARCHAR(255)   PRIMARY KEY,
+    fingerprint         VARCHAR(255),
+    in_flight           SMALLINT       NOT NULL,
+    response            VARBINARY(MAX),
+    lock_expires_at     BIGINT         NOT NULL,
+    response_expires_at BIGINT
+);
+----
+
+Expiry is enforced lazily on read: an expired entry is never replayed, it is reclaimed in place as a
+new reservation, so the store stays correct with no background job. A row whose key never comes back
+is only reclaimed if that key is seen again, so to bound table growth run a periodic purge (a cron
+job, a scheduled task, or `quarkus-scheduler` if you already depend on it), binding the current
+epoch-millis to both parameters:
+
+[source,sql]
+----
+DELETE FROM idempotency_entry
+ WHERE (in_flight = 1 AND lock_expires_at < ?)
+    OR (in_flight = 0 AND response_expires_at IS NOT NULL AND response_expires_at < ?);
+----
+
+=== Startup log
 
 At startup the extension logs the active store, which makes a misconfiguration obvious:
 
@@ -219,6 +404,31 @@ At startup the extension logs the active store, which makes a misconfiguration o
 ----
 Idempotency active: store=redis (RedisIdempotencyStore), methods=[POST], header=Idempotency-Key, response-ttl=PT10M
 ----
+
+[[metrics]]
+== Metrics
+
+With `quarkus-micrometer` on the classpath (for example through
+`quarkus-micrometer-registry-prometheus`), the extension registers these counters. Without
+Micrometer, nothing is recorded and no extra dependency is pulled in.
+
+[cols="2,3",options="header"]
+|===
+| Counter | Counts
+
+| `idempotency.requests` with tag `outcome=fresh` | Keyed requests that ran the handler for the first time.
+| `idempotency.requests` with tag `outcome=replay` | Retries answered from the stored response.
+| `idempotency.requests` with tag `outcome=conflict` | Retries rejected with `409` because the original is still in flight.
+| `idempotency.requests` with tag `outcome=mismatch` | Keys reused with a different payload, rejected with `422`.
+| `idempotency.entries.stored` | Responses captured and persisted for replay.
+| `idempotency.entries.released` | Reserved keys released without storing a response (`5xx`, streaming, or oversized).
+| `idempotency.store.errors` | Responses that could not be persisted; the key is released so a retry runs again.
+|===
+
+In Prometheus they appear as `idempotency_requests_total{outcome="..."}`,
+`idempotency_entries_stored_total`, `idempotency_entries_released_total` and
+`idempotency_store_errors_total`. A failure while reserving a key is not counted there: the request
+fails with a `5xx`, so watch the HTTP error rate of guarded endpoints as well.
 
 [[security]]
 == Security model
@@ -264,11 +474,11 @@ only access control for idempotent endpoints.
 
 === Stored responses and secrets
 
-Stored responses (entity, status, and the allow-listed headers) are persisted — in Redis they are
-visible to anyone with Redis access. Credential headers (`Set-Cookie`, `Authorization`, and any
+Stored responses (entity, status, and the allow-listed headers) are persisted — in Redis or the database they are
+visible to anyone with access to that store. Credential headers (`Set-Cookie`, `Authorization`, and any
 header whose name contains `token`/`secret`/`api-key`/`password`/`credential`) are *always* dropped,
 regardless of `captured-headers`. Still, ensure stored response bodies carry no secrets, and run
-Redis with AUTH and TLS.
+Redis with AUTH and TLS (or restrict access to the idempotency table).
 
 === Resource bounds
 
@@ -289,7 +499,7 @@ fingerprinted without a blocking read on reactive endpoints. Bound request size 
 do not need body fingerprinting.
 * Responses are captured as the response entity, bounded by `max-stored-body`. Streaming responses
 (`Multi`/SSE/`StreamingOutput`) are not cached — they pass through and re-execute on retry.
-* The in-memory store is per-instance — use the Redis store for clustered deployments.
+* The in-memory store is per-instance — use the Redis or JDBC store for clustered deployments.
 
 [[extension-configuration-reference]]
 == Configuration reference
