@@ -23,6 +23,12 @@ response instead of executing the operation twice — so the side effect happens
 With the extension on the classpath, any `POST`/`PATCH` carrying an `Idempotency-Key` header is
 handled idempotently — no code changes required.
 
+| Extension | Quarkus |
+|---|---|
+| 0.3.x | 3.40+ |
+| 0.2.x | 3.37 |
+| 0.1.x | 3.37 |
+
 ## Quick start
 
 ```bash
@@ -55,8 +61,11 @@ curl -i -H "Idempotency-Key: 8e039f93" -H "Content-Type: application/json" \
 - **Safe for multi-user / multi-tenant APIs.** The store key is a per-caller composite —
   `SHA-256(principal ⊕ scope ⊕ raw-key)` — so one caller can never be served another caller's stored
   response. Optional per-tenant isolation via a trusted scope header.
-- **Pluggable stores.** Bounded in-memory (Caffeine) for a single node, or distributed **Redis** for
-  clusters — behind a small SPI.
+- **Pluggable stores.** Bounded in-memory (Caffeine) for a single node, or distributed **Redis** or
+  **JDBC** (any relational database) for clusters — behind a small SPI.
+- **Per-endpoint control.** Optional `@Idempotent` annotation to opt an endpoint in or out, require a
+  key, or change its retention.
+- **Observable.** Micrometer counters for fresh, replayed, conflicting and mismatched requests.
 - **Hardened.** Bounded memory, capped fingerprint/stored-body sizes, and an unconditional deny-list
   that keeps credential headers (`Set-Cookie`, `Authorization`, `*-token`…) out of stored responses.
 - **Reactive-ready.** Works with `Uni`/async return types.
@@ -74,82 +83,9 @@ security model.
 - **`redis`** — add `quarkus-redis-client`, set `quarkus.idempotency.store=redis`. Reserves a key
   with a single atomic `SET NX GET PX` round-trip (requires Redis 7.0+).
 - **`jdbc`** — add `quarkus-agroal` and a JDBC driver (`quarkus-jdbc-postgresql`, `-mysql`,
-  `-oracle`, `-mssql`, …), set `quarkus.idempotency.store=jdbc`. Works on any relational database:
-  the reservation is atomic through the primary key (the `INSERT` either wins or fails with an
-  integrity violation) and an expired key is reclaimed with a single conditional `UPDATE`. JDBC is
-  blocking, so each call runs on a worker thread; prefer `redis` for fully-reactive, high-throughput
-  workloads.
-
-### JDBC schema
-
-The extension never issues DDL; the application owns the table. Create it once with the shape below
-before enabling the store. The table name is configurable with `quarkus.idempotency.jdbc.table`
-(default `idempotency_entry`). The `response` column holds the serialized response as binary, and the
-two `*_expires_at` columns store epoch-millis as `BIGINT`.
-
-PostgreSQL:
-
-```sql
-CREATE TABLE idempotency_entry (
-    id                  VARCHAR(255) PRIMARY KEY,
-    fingerprint         VARCHAR(255),
-    in_flight           SMALLINT     NOT NULL,
-    response            BYTEA,
-    lock_expires_at     BIGINT       NOT NULL,
-    response_expires_at BIGINT
-);
-```
-
-MySQL / MariaDB:
-
-```sql
-CREATE TABLE idempotency_entry (
-    id                  VARCHAR(255) PRIMARY KEY,
-    fingerprint         VARCHAR(255),
-    in_flight           SMALLINT     NOT NULL,
-    response            LONGBLOB,
-    lock_expires_at     BIGINT       NOT NULL,
-    response_expires_at BIGINT
-);
-```
-
-Oracle (no `BIGINT`/`BOOLEAN` keywords, so `NUMBER` is used):
-
-```sql
-CREATE TABLE idempotency_entry (
-    id                  VARCHAR2(255) PRIMARY KEY,
-    fingerprint         VARCHAR2(255),
-    in_flight           NUMBER(1)     NOT NULL,
-    response            BLOB,
-    lock_expires_at     NUMBER(19)    NOT NULL,
-    response_expires_at NUMBER(19)
-);
-```
-
-SQL Server:
-
-```sql
-CREATE TABLE idempotency_entry (
-    id                  VARCHAR(255)   PRIMARY KEY,
-    fingerprint         VARCHAR(255),
-    in_flight           SMALLINT       NOT NULL,
-    response            VARBINARY(MAX),
-    lock_expires_at     BIGINT         NOT NULL,
-    response_expires_at BIGINT
-);
-```
-
-Expiry is enforced lazily on read: an expired entry is never replayed, it is reclaimed in place as a
-new reservation, so the store stays correct with no background job. A row whose key never comes back
-is only reclaimed if that key is seen again, so to bound table growth run a periodic purge (a cron
-job, a scheduled task, or `quarkus-scheduler` if you already depend on it) binding the current
-epoch-millis to both parameters:
-
-```sql
-DELETE FROM idempotency_entry
- WHERE (in_flight = 1 AND lock_expires_at < ?)
-    OR (in_flight = 0 AND response_expires_at IS NOT NULL AND response_expires_at < ?);
-```
+  `-oracle`, `-mssql`, …), set `quarkus.idempotency.store=jdbc`. The application owns the table; see
+  the [JDBC section of the documentation](https://docs.quarkiverse.io/quarkus-http-idempotency/dev/#jdbc-any-relational-database)
+  for the schema of each database and the cleanup query.
 
 ## Build
 

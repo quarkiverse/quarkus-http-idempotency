@@ -2,7 +2,8 @@
 
 Living performance document: what the extension costs, what it saves, and the improvements made
 over time. All numbers are **measured against the running lab app over real HTTP** (not estimated)
-with the harness in `quarkus-http-idempotency-lab/benchmarks/`.
+with the harness in `quarkus-http-idempotency-lab/benchmarks/`, a separate lab project that is not
+part of this repository.
 
 ## Methodology
 
