@@ -92,6 +92,31 @@ public class ControllableStoreTest {
     }
 
     @Test
+    void acquireFailureIsCounted() {
+        double errors0 = count("idempotency.store.errors", null);
+        store.failAcquire();
+
+        // The key cannot be reserved, so the request fails closed instead of running unguarded.
+        given().header(new Header("Idempotency-Key", "af1")).when().post("/ctl/op")
+                .then().statusCode(500);
+
+        assertEquals(errors0 + 1, count("idempotency.store.errors", null), 0.001, "acquire failure counted");
+    }
+
+    @Test
+    void releaseFailureIsCounted() {
+        double errors0 = count("idempotency.store.errors", null);
+        store.failNextComplete();
+        store.failRelease();
+
+        given().header(new Header("Idempotency-Key", "rf1")).when().post("/ctl/op")
+                .then().statusCode(200);
+
+        // Both the failed persist and the failed release that follows it are store errors.
+        Await.until(() -> count("idempotency.store.errors", null) >= errors0 + 2, "release failure counted");
+    }
+
+    @Test
     void ttlOverrideIsApplied() {
         given().header(new Header("Idempotency-Key", "t1")).when().post("/ctl/ttl")
                 .then().statusCode(200);

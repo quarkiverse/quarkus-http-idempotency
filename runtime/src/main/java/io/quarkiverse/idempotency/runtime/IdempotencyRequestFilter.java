@@ -188,7 +188,10 @@ public class IdempotencyRequestFilter implements ContainerRequestFilter {
                         rrCtx.resume(problem);
                     }
                 },
-                failure -> rrCtx.resume(failure));
+                failure -> {
+                    metrics.onStoreError();
+                    rrCtx.resume(failure);
+                });
     }
 
     /**
@@ -206,7 +209,10 @@ public class IdempotencyRequestFilter implements ContainerRequestFilter {
                 LOG.debug("Response completed without capture (streaming?); releasing idempotency key");
                 metrics.onReleased();
                 store.get().release((String) activeKey).subscribe().with(ignored -> {
-                }, t -> LOG.debug("Idempotency key release on response end failed", t));
+                }, t -> {
+                    LOG.debug("Idempotency key release on response end failed", t);
+                    metrics.onStoreError();
+                });
             }
         });
     }

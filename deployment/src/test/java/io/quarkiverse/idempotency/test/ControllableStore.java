@@ -46,6 +46,8 @@ public class ControllableStore implements IdempotencyStore {
     private final AtomicReference<Duration> lastTtl = new AtomicReference<>();
     private final AtomicInteger releases = new AtomicInteger();
     private volatile boolean failComplete;
+    private volatile boolean failAcquire;
+    private volatile boolean failRelease;
     private volatile boolean forceConflict;
 
     /** Restore a clean slate between tests so cases do not share mutable state. */
@@ -54,6 +56,8 @@ public class ControllableStore implements IdempotencyStore {
         lastTtl.set(null);
         releases.set(0);
         failComplete = false;
+        failAcquire = false;
+        failRelease = false;
         forceConflict = false;
     }
 
@@ -66,6 +70,14 @@ public class ControllableStore implements IdempotencyStore {
         failComplete = true;
     }
 
+    void failAcquire() {
+        failAcquire = true;
+    }
+
+    void failRelease() {
+        failRelease = true;
+    }
+
     Duration lastTtl() {
         return lastTtl.get();
     }
@@ -76,6 +88,9 @@ public class ControllableStore implements IdempotencyStore {
 
     @Override
     public Uni<Reservation> acquire(String key, String fingerprint, Duration lockTtl) {
+        if (failAcquire) {
+            return Uni.createFrom().failure(new RuntimeException("forced acquire failure"));
+        }
         if (forceConflict) {
             return Uni.createFrom().item(new Reservation.Existing(new StoredEntry(fingerprint, null)));
         }
@@ -97,6 +112,9 @@ public class ControllableStore implements IdempotencyStore {
 
     @Override
     public Uni<Void> release(String key) {
+        if (failRelease) {
+            return Uni.createFrom().failure(new RuntimeException("forced release failure"));
+        }
         entries.remove(key);
         releases.incrementAndGet();
         return Uni.createFrom().voidItem();

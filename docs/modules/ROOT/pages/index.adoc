@@ -293,8 +293,8 @@ The Redis store reserves a key with a single atomic `SET key value NX GET PX ttl
 Every guarded request takes a connection from the Redis client pool for its store round-trips, so
 `quarkus.redis.max-pool-size` must be sized at or above the peak number of concurrent guarded
 requests. The default pool (6 connections + 24 wait queue) overflows under load and surfaces as
-HTTP 500 (`ConnectionPoolTooBusyException`). Size it to your real peak and alert on the `5xx` rate
-of guarded endpoints.
+HTTP 500 (`ConnectionPoolTooBusyException`). Size it to your real peak and alert on the
+`idempotency.store.errors` counter (see <<metrics>>).
 ====
 
 === JDBC (any relational database)
@@ -422,13 +422,14 @@ Micrometer, nothing is recorded and no extra dependency is pulled in.
 | `idempotency.requests` with tag `outcome=mismatch` | Keys reused with a different payload, rejected with `422`.
 | `idempotency.entries.stored` | Responses captured and persisted for replay.
 | `idempotency.entries.released` | Reserved keys released without storing a response (`5xx`, streaming, or oversized).
-| `idempotency.store.errors` | Responses that could not be persisted; the key is released so a retry runs again.
+| `idempotency.store.errors` | Failed store operations: reserving a key (the request fails with `5xx`), persisting a response (the key is released so a retry runs again), or releasing a key.
 |===
 
 In Prometheus they appear as `idempotency_requests_total{outcome="..."}`,
 `idempotency_entries_stored_total`, `idempotency_entries_released_total` and
-`idempotency_store_errors_total`. A failure while reserving a key is not counted there: the request
-fails with a `5xx`, so watch the HTTP error rate of guarded endpoints as well.
+`idempotency_store_errors_total`. Alert on any increase of `idempotency_store_errors_total`: the
+extension fails closed, so a store that cannot reserve keys turns into `5xx` responses for your
+clients.
 
 [[security]]
 == Security model

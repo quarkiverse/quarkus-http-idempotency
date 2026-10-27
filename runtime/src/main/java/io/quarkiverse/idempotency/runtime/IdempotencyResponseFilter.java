@@ -152,7 +152,10 @@ public class IdempotencyResponseFilter implements ContainerResponseFilter {
      */
     private void fire(Uni<Void> release) {
         release.subscribe().with(ignored -> {
-        }, failure -> LOG.error("Failed to release idempotency key", failure));
+        }, failure -> {
+            LOG.error("Failed to release idempotency key", failure);
+            metrics.onStoreError();
+        });
     }
 
     /**
