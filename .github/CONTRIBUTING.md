@@ -15,7 +15,7 @@ Requirements:
 
 - Java 17+ (JDK 21 is used by CI, including the native build)
 - Maven 3.9+
-- Quarkus 3.x
+- Quarkus 3.40+ (the version is managed by the root `pom.xml`)
 
 Build and run the full test suite locally:
 
@@ -36,11 +36,12 @@ mvn verify -Dnative -Dquarkus.native.container-build=true
 - The build runs the formatter and import sorter; run `mvn clean install` before pushing
   so your changes are already formatted (CI fails on unformatted code).
 - Add or update tests for any behavior change. The deployment module hosts the
-  `QuarkusUnitTest`-based tests; `integration-tests` hosts the JVM and native ITs.
+  `QuarkusExtensionTest`-based tests; `integration-tests` hosts the JVM and native ITs.
 - Update the documentation under `docs/modules/ROOT/pages/` when you change configuration
   or behavior.
 
 ## Reporting Security Issues
 
-Please do not open public issues for security vulnerabilities. Report them privately
-to the maintainers so a fix can be prepared before disclosure.
+Please do not open public issues for security vulnerabilities. Report them privately through
+[GitHub security advisories](https://github.com/quarkiverse/quarkus-http-idempotency/security/advisories/new)
+so a fix can be prepared before disclosure.
