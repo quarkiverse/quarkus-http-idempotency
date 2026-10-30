@@ -37,6 +37,20 @@
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-caffeine</artifactId>
         </dependency>
+        <!-- One of the two Jackson lines is on the application's classpath, through quarkus-jackson: Jackson 2
+             on Quarkus 3, Jackson 3 on Quarkus 4. Both codecs compile here; the one matching the classpath is
+             registered at build time. -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>tools.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson3.version}</version>
+            <optional>true</optional>
+        </dependency>
         <!-- Optional distributed store backend; only used when quarkus.idempotency.store=redis. -->
         <dependency>
             <groupId>io.quarkus</groupId>

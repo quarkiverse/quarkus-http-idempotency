@@ -19,13 +19,12 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.quarkiverse.idempotency.runtime.spi.StoredEntry;
 import io.quarkiverse.idempotency.runtime.spi.StoredResponse;
@@ -38,7 +37,18 @@ import io.quarkiverse.idempotency.runtime.spi.StoredResponse;
  */
 class StoredResponsesTest {
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    // Stands in for the application's Jackson, whichever line it is: what matters here is when it is used.
+    private final JsonCodec codec = new JsonCodec() {
+        @Override
+        public byte[] write(Object value) {
+            return ("json:" + value).getBytes(StandardCharsets.UTF_8);
+        }
+
+        @Override
+        public <T> T read(byte[] json, Class<T> type) throws IOException {
+            throw new IOException("not expected here");
+        }
+    };
 
     @Test
     void reRendersAJsonMapBodyToBytes() throws Exception {
@@ -49,11 +59,11 @@ class StoredResponsesTest {
         StoredEntry entry = new StoredEntry("fp",
                 new StoredResponse(200, Map.of(), body, "application/json"));
 
-        StoredEntry rendered = StoredResponses.materializeBody(entry, mapper);
+        StoredEntry rendered = StoredResponses.materializeBody(entry, codec);
 
         Object entity = rendered.response().entity();
         assertInstanceOf(byte[].class, entity);
-        assertArrayEquals(mapper.writeValueAsBytes(body), (byte[]) entity);
+        assertArrayEquals(codec.write(body), (byte[]) entity);
     }
 
     @Test
@@ -62,7 +72,7 @@ class StoredResponsesTest {
         StoredEntry entry = new StoredEntry("fp",
                 new StoredResponse(200, Map.of(), "plain text", "application/json"));
 
-        StoredEntry rendered = StoredResponses.materializeBody(entry, mapper);
+        StoredEntry rendered = StoredResponses.materializeBody(entry, codec);
 
         Object entity = rendered.response().entity();
         assertInstanceOf(byte[].class, entity);
@@ -77,11 +87,11 @@ class StoredResponsesTest {
         StoredEntry entry = new StoredEntry("fp",
                 new StoredResponse(201, Map.of(), body, null));
 
-        StoredEntry rendered = StoredResponses.materializeBody(entry, mapper);
+        StoredEntry rendered = StoredResponses.materializeBody(entry, codec);
 
         Object entity = rendered.response().entity();
         assertInstanceOf(byte[].class, entity);
-        assertArrayEquals(mapper.writeValueAsBytes(body), (byte[]) entity);
+        assertArrayEquals(codec.write(body), (byte[]) entity);
     }
 
     @Test
@@ -89,7 +99,7 @@ class StoredResponsesTest {
         StoredEntry entry = new StoredEntry("fp",
                 new StoredResponse(200, Map.of(), 42, "text/plain"));
 
-        StoredEntry rendered = StoredResponses.materializeBody(entry, mapper);
+        StoredEntry rendered = StoredResponses.materializeBody(entry, codec);
 
         Object entity = rendered.response().entity();
         assertInstanceOf(byte[].class, entity);
@@ -102,13 +112,13 @@ class StoredResponsesTest {
         StoredEntry entry = new StoredEntry("fp",
                 new StoredResponse(200, Map.of(), bytes, "application/json"));
 
-        assertSame(entry, StoredResponses.materializeBody(entry, mapper));
+        assertSame(entry, StoredResponses.materializeBody(entry, codec));
     }
 
     @Test
     void leavesAnInFlightEntryUntouched() {
         StoredEntry inFlight = new StoredEntry("fp", null);
 
-        assertSame(inFlight, StoredResponses.materializeBody(inFlight, mapper));
+        assertSame(inFlight, StoredResponses.materializeBody(inFlight, codec));
     }
 }

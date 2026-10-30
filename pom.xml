@@ -41,6 +41,8 @@
         <maven.compiler.release>21</maven.compiler.release>
         <quarkus.version>3.40.1.1</quarkus.version>
         <http-problem.version>3.38.2</http-problem.version>
+        <!-- the Jackson 3 the Quarkus 4 BOM manages, for compiling the Jackson 3 codec on Quarkus 3 -->
+        <jackson3.version>3.1.8</jackson3.version>
     </properties>
 
     <modules>
@@ -127,4 +129,15 @@
             </plugin>
         </plugins>
     </build>
+    <profiles>
+        <!-- Builds and tests against Quarkus 4: mvn install -Pquarkus-4. The Quarkus 4 line of the problem-details
+             extension goes with it; its 3.x line registers its serializer with Jackson 2 only. -->
+        <profile>
+            <id>quarkus-4</id>
+            <properties>
+                <quarkus.version>4.0.0.Beta2</quarkus.version>
+                <http-problem.version>4.0.0.Beta1</http-problem.version>
+            </properties>
+        </profile>
+    </profiles>
 </project>

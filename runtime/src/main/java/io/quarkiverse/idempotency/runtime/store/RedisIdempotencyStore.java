@@ -20,8 +20,6 @@ import java.time.Duration;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import io.quarkiverse.idempotency.runtime.spi.IdempotencyStore;
 import io.quarkiverse.idempotency.runtime.spi.Reservation;
 import io.quarkiverse.idempotency.runtime.spi.StoredEntry;
@@ -48,13 +46,13 @@ public class RedisIdempotencyStore implements IdempotencyStore {
 
     private final ReactiveValueCommands<String, StoredEntry> values;
     private final ReactiveKeyCommands<String> keys;
-    private final ObjectMapper mapper;
+    private final JsonCodec codec;
 
     @Inject
-    public RedisIdempotencyStore(ReactiveRedisDataSource dataSource, ObjectMapper mapper) {
+    public RedisIdempotencyStore(ReactiveRedisDataSource dataSource, JsonCodec codec) {
         this.values = dataSource.value(StoredEntry.class);
         this.keys = dataSource.key();
-        this.mapper = mapper;
+        this.codec = codec;
     }
 
     @Override
@@ -65,7 +63,7 @@ public class RedisIdempotencyStore implements IdempotencyStore {
                 new SetArgs().nx().px(lockTtl.toMillis()))
                 .map(previous -> previous == null
                         ? new Reservation.Acquired()
-                        : new Reservation.Existing(StoredResponses.materializeBody(previous, mapper)));
+                        : new Reservation.Existing(StoredResponses.materializeBody(previous, codec)));
     }
 
     @Override

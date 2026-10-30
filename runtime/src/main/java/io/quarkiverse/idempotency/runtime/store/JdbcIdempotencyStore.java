@@ -15,6 +15,7 @@
  */
 package io.quarkiverse.idempotency.runtime.store;
 
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -24,8 +25,6 @@ import java.time.Duration;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.agroal.api.AgroalDataSource;
 import io.quarkiverse.idempotency.runtime.IdempotencyConfig;
@@ -66,7 +65,7 @@ public class JdbcIdempotencyStore implements IdempotencyStore {
     private static final String SQLSTATE_INTEGRITY_VIOLATION = "23";
 
     private final Instance<AgroalDataSource> dataSource;
-    private final ObjectMapper mapper;
+    private final JsonCodec codec;
 
     private final String insertSql;
     private final String selectSql;
@@ -75,9 +74,9 @@ public class JdbcIdempotencyStore implements IdempotencyStore {
     private final String releaseSql;
 
     @Inject
-    public JdbcIdempotencyStore(Instance<AgroalDataSource> dataSource, ObjectMapper mapper, IdempotencyConfig config) {
+    public JdbcIdempotencyStore(Instance<AgroalDataSource> dataSource, JsonCodec codec, IdempotencyConfig config) {
         this.dataSource = dataSource;
-        this.mapper = mapper;
+        this.codec = codec;
         String table = sanitizeTableName(config.jdbc().table());
         this.insertSql = "INSERT INTO " + table
                 + " (id, fingerprint, in_flight, response, lock_expires_at, response_expires_at)"
@@ -145,9 +144,9 @@ public class JdbcIdempotencyStore implements IdempotencyStore {
                 StoredEntry current = select(conn, key, now);
                 return current == null
                         ? new Reservation.Acquired()
-                        : new Reservation.Existing(StoredResponses.materializeBody(current, mapper));
+                        : new Reservation.Existing(StoredResponses.materializeBody(current, codec));
             }
-            return new Reservation.Existing(StoredResponses.materializeBody(existing, mapper));
+            return new Reservation.Existing(StoredResponses.materializeBody(existing, codec));
         } catch (SQLException e) {
             throw new IllegalStateException("Idempotency JDBC acquire failed for key", e);
         }
@@ -179,10 +178,10 @@ public class JdbcIdempotencyStore implements IdempotencyStore {
                     return null; // completed but expired: reclaimable
                 }
                 byte[] response = rs.getBytes("response");
-                StoredResponse stored = response == null ? null : mapper.readValue(response, StoredResponse.class);
+                StoredResponse stored = response == null ? null : codec.read(response, StoredResponse.class);
                 return new StoredEntry(fingerprint, stored);
             }
-        } catch (java.io.IOException e) {
+        } catch (IOException e) {
             throw new SQLException("Could not deserialize stored idempotency response", e);
         }
     }
@@ -202,11 +201,11 @@ public class JdbcIdempotencyStore implements IdempotencyStore {
     private void completeBlocking(String key, StoredResponse response, Duration ttl) {
         try (Connection conn = dataSource.get().getConnection();
                 PreparedStatement complete = conn.prepareStatement(completeSql)) {
-            complete.setBytes(1, mapper.writeValueAsBytes(response));
+            complete.setBytes(1, codec.write(response));
             complete.setLong(2, System.currentTimeMillis() + ttl.toMillis());
             complete.setString(3, key);
             complete.executeUpdate();
-        } catch (SQLException | com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (SQLException | IOException e) {
             throw new IllegalStateException("Idempotency JDBC complete failed for key", e);
         }
     }

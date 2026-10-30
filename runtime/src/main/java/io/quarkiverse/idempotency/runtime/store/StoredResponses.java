@@ -15,13 +15,11 @@
  */
 package io.quarkiverse.idempotency.runtime.store;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
 import org.jboss.logging.Logger;
-
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.quarkiverse.idempotency.runtime.spi.StoredEntry;
 import io.quarkiverse.idempotency.runtime.spi.StoredResponse;
@@ -52,11 +50,11 @@ final class StoredResponses {
      * never breaks the replay, so the catch is intentionally broad.
      *
      * @param entry the entry read back from the store, or {@code null}
-     * @param mapper the JSON mapper used to render a JSON entity
+     * @param codec the JSON codec used to render a JSON entity
      * @return an equivalent entry whose response body is a {@code byte[]}, or the original entry when
      *         there is nothing to pre-render or rendering failed
      */
-    static StoredEntry materializeBody(StoredEntry entry, ObjectMapper mapper) {
+    static StoredEntry materializeBody(StoredEntry entry, JsonCodec codec) {
         StoredResponse response = entry == null ? null : entry.response();
         if (response == null || response.entity() == null || response.entity() instanceof byte[]) {
             return entry; // in-flight marker, no body, or already bytes
@@ -72,13 +70,13 @@ final class StoredResponses {
             } else if (mediaType == null || mediaType.toLowerCase(Locale.ROOT).contains("json")) {
                 // A Response built without an explicit .type(...) is captured with no media type, as
                 // the type is only negotiated later, when the MessageBodyWriter runs.
-                body = mapper.writeValueAsBytes(entity);
+                body = codec.write(entity);
             } else {
                 body = String.valueOf(entity).getBytes(StandardCharsets.UTF_8);
             }
             return new StoredEntry(entry.fingerprint(),
                     new StoredResponse(response.status(), response.headers(), body, response.mediaType()));
-        } catch (RuntimeException | JsonProcessingException e) {
+        } catch (RuntimeException | IOException e) {
             LOG.debugf(e, "Could not pre-render replay body; falling back to the deserialized entity");
             return entry;
         }

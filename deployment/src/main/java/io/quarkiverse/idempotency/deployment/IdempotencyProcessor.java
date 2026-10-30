@@ -23,7 +23,6 @@ import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.MethodInfo;
 
-import io.quarkiverse.idempotency.runtime.IdempotencyConfig;
 import io.quarkiverse.idempotency.runtime.IdempotencyRecorder;
 import io.quarkiverse.idempotency.runtime.IdempotencyRequestFilter;
 import io.quarkiverse.idempotency.runtime.IdempotencyResponseFilter;
@@ -31,6 +30,8 @@ import io.quarkiverse.idempotency.runtime.IdempotencyStartup;
 import io.quarkiverse.idempotency.runtime.Idempotent;
 import io.quarkiverse.idempotency.runtime.store.InMemoryIdempotencyStore;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
+import io.quarkus.bootstrap.classloading.QuarkusClassLoader;
+import io.quarkus.builder.Version;
 import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.annotations.BuildProducer;
@@ -38,7 +39,6 @@ import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
-import io.quarkus.deployment.builditem.ConfigMappingBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.resteasy.reactive.spi.ContainerRequestFilterBuildItem;
 import io.quarkus.resteasy.reactive.spi.ContainerResponseFilterBuildItem;
@@ -51,11 +51,6 @@ class IdempotencyProcessor {
     @BuildStep
     FeatureBuildItem feature() {
         return new FeatureBuildItem(FEATURE);
-    }
-
-    @BuildStep
-    ConfigMappingBuildItem config() {
-        return new ConfigMappingBuildItem(IdempotencyConfig.class, "quarkus.idempotency");
     }
 
     /**
@@ -89,9 +84,17 @@ class IdempotencyProcessor {
                 // Default no-op metrics; replaced by the Micrometer-backed bean when present.
                 .addBeanClass("io.quarkiverse.idempotency.runtime.metrics.NoopIdempotencyMetrics");
 
+        boolean preferJackson3 = Version.getVersion().startsWith("4.") || Version.getVersion().startsWith("999");
+
+        // The JSON codec of the out-of-process stores, over whichever Jackson the application has: Jackson 3
+        // on Quarkus 4, Jackson 2 before. By class name so that neither codec is loaded here.
+        builder.addBeanClass(preferJackson3
+                ? "io.quarkiverse.idempotency.runtime.store.Jackson3JsonCodec"
+                : "io.quarkiverse.idempotency.runtime.store.Jackson2JsonCodec");
+
         // Register the Redis store only when the redis client is on the classpath, by class name so
         // this processor never loads the redis-dependent class when redis is absent.
-        if (isPresent("io.quarkus.redis.datasource.RedisDataSource")) {
+        if (QuarkusClassLoader.isClassPresentAtRuntime("io.quarkus.redis.datasource.RedisDataSource")) {
             builder.addBeanClass("io.quarkiverse.idempotency.runtime.store.RedisIdempotencyStore");
         }
 
@@ -109,7 +112,7 @@ class IdempotencyProcessor {
 
         // Register the Micrometer-backed metrics only when Micrometer is on the classpath, by class
         // name so the micrometer-dependent class is never loaded when micrometer is absent.
-        if (isPresent("io.micrometer.core.instrument.MeterRegistry")) {
+        if (QuarkusClassLoader.isClassPresentAtRuntime("io.micrometer.core.instrument.MeterRegistry")) {
             builder.addBeanClass("io.quarkiverse.idempotency.runtime.metrics.MicrometerIdempotencyMetrics");
         }
 
@@ -179,12 +182,4 @@ class IdempotencyProcessor {
         return target.asClass().name().toString();
     }
 
-    private static boolean isPresent(String className) {
-        try {
-            Class.forName(className, false, Thread.currentThread().getContextClassLoader());
-            return true;
-        } catch (Throwable t) {
-            return false;
-        }
-    }
 }
