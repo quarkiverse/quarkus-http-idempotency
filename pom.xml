@@ -42,7 +42,7 @@
         <quarkus.version>3.40.1.1</quarkus.version>
         <http-problem.version>3.38.2</http-problem.version>
         <!-- the Jackson 3 the Quarkus 4 BOM manages, for compiling the Jackson 3 codec on Quarkus 3 -->
-        <jackson3.version>3.1.8</jackson3.version>
+        <jackson3.version>3.2.4</jackson3.version>
     </properties>
 
     <modules>
