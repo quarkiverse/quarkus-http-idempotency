@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -e
+
+# Same as the default script from quarkusio/quarkus-ecosystem-ci, plus the Quarkus 4 line of
+# quarkus-http-problem: Quarkus main is on Jackson 3, and the 3.x line only works with Jackson 2.
+SETTINGS=.github/quarkus-ecosystem-maven-settings.xml
+HTTP_PROBLEM_VERSION=$(mvn -nsu --settings $SETTINGS -B -N -q help:evaluate -Pquarkus-4 -Dexpression=http-problem.version -DforceStdout)
+
+# update the versions
+mvn -nsu --settings $SETTINGS -B versions:set-property -Dproperty=quarkus.version -DnewVersion=${QUARKUS_VERSION} -DgenerateBackupPoms=false
+mvn -nsu --settings $SETTINGS -B versions:set-property -Dproperty=http-problem.version -DnewVersion=${HTTP_PROBLEM_VERSION} -DgenerateBackupPoms=false
+
+# run the tests
+mvn -nsu --settings $SETTINGS -B clean install -Dnative -Dquarkus.native.container-build=true --fail-at-end -e
