@@ -131,9 +131,16 @@
     </build>
     <profiles>
         <!-- Builds and tests against Quarkus 4: mvn install -Pquarkus-4. The Quarkus 4 line of the problem-details
-             extension goes with it; its 3.x line registers its serializer with Jackson 2 only. -->
+             extension goes with it; its 3.x line registers its serializer with Jackson 2 only. The ecosystem CI only
+             sets -Dquarkus.version=999-SNAPSHOT, so that value turns the profile on as well. -->
         <profile>
             <id>quarkus-4</id>
+            <activation>
+                <property>
+                    <name>quarkus.version</name>
+                    <value>999-SNAPSHOT</value>
+                </property>
+            </activation>
             <properties>
                 <quarkus.version>4.0.0.Beta2</quarkus.version>
                 <http-problem.version>4.0.0.Beta1</http-problem.version>
