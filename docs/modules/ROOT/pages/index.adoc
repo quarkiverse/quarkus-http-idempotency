@@ -28,12 +28,26 @@ header is handled idempotently. The extension renders its error responses via `q
 so your application also needs a JSON provider — add `quarkus-rest-jackson` (or `quarkus-rest-jsonb`)
 if it does not have one already.
 
+On Quarkus 4, also add the Quarkus 4 line of `quarkus-http-problem` (4.x) to your application. The
+extension brings in the 3.x line, which registers its serializer with Jackson 2 only, so on Quarkus 4
+the error responses would not be rendered as problem details:
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.quarkiverse.httpproblem</groupId>
+    <artifactId>quarkus-http-problem</artifactId>
+    <version>4.0.0.Beta1</version>
+</dependency>
+----
+
 === Compatibility
 
 [cols="1,1",options="header"]
 |===
 | Extension | Quarkus
 
+| 0.4.x | 3.40+ and 4.x
 | 0.3.x | 3.40+
 | 0.2.x | 3.37
 | 0.1.x | 3.37
